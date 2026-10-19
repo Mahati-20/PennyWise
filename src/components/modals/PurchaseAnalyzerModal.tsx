@@ -35,6 +35,8 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
   const [result, setResult] = useState<PurchaseAnalysisResult | null>(null);
   const [isSaved, setIsSaved] = useState(false);
   const [isConvertedToExpense, setIsConvertedToExpense] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [savingAction, setSavingAction] = useState(false);
 
   if (!isOpen) return null;
 
@@ -56,16 +58,26 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
     setIsConvertedToExpense(false);
   };
 
-  const handleSaveToWishlist = () => {
-    if (result) {
-      savePurchaseAnalysis(result);
+  const handleSaveToWishlist = async () => {
+    if (!result) return;
+    setActionError('');
+    setSavingAction(true);
+    try {
+      await savePurchaseAnalysis(result);
       setIsSaved(true);
+    } catch {
+      setActionError('Could not save this analysis. Please retry.');
+    } finally {
+      setSavingAction(false);
     }
   };
 
-  const handleRecordExpense = () => {
-    if (result) {
-      addTransaction({
+  const handleRecordExpense = async () => {
+    if (!result) return;
+    setActionError('');
+    setSavingAction(true);
+    try {
+      await addTransaction({
         amount: result.input.amount,
         currency: profile.currency,
         category: result.input.category,
@@ -75,6 +87,10 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
         description: `Purchased: ${result.input.name}`,
       });
       setIsConvertedToExpense(true);
+    } catch {
+      setActionError('Could not record this expense. Please retry.');
+    } finally {
+      setSavingAction(false);
     }
   };
 
@@ -93,6 +109,7 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 md:p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
       <div className="w-full max-w-2xl rounded-2xl bg-[#151E38] border border-white/10 p-5 md:p-6 shadow-2xl relative text-text-primary my-auto">
+        {actionError && <p role="alert" className="mb-4 rounded-lg border border-semantic-error/40 bg-semantic-error/10 p-3 text-xs text-semantic-error">{actionError}</p>}
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-5">
           <div className="flex items-center gap-3">
@@ -361,7 +378,7 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
               <button
                 type="button"
                 onClick={handleSaveToWishlist}
-                disabled={isSaved}
+                disabled={isSaved || savingAction}
                 className="px-4 py-2 rounded-xl bg-midnight-surface border border-white/10 hover:border-white/20 text-xs font-semibold text-text-primary transition-all flex items-center gap-1.5"
               >
                 <Icon name={isSaved ? 'BookmarkCheck' : 'Bookmark'} size={15} className="text-turquoise" />
@@ -372,7 +389,7 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
                 <button
                   type="button"
                   onClick={handleRecordExpense}
-                  disabled={isConvertedToExpense}
+                  disabled={isConvertedToExpense || savingAction}
                   className="px-4 py-2 rounded-xl bg-semantic-warning/20 border border-semantic-warning/30 hover:bg-semantic-warning/30 text-xs font-semibold text-semantic-warning transition-all flex items-center gap-1.5"
                 >
                   <Icon name="Receipt" size={15} />
@@ -386,3 +403,4 @@ export const PurchaseAnalyzerModal: React.FC<PurchaseAnalyzerModalProps> = ({
     </div>
   );
 };
+

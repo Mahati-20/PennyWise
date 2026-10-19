@@ -35,9 +35,10 @@ import {
   evaluatePurchaseAffordability,
   generateSmartBudgets,
 } from '../utils/calculations';
+import { api } from '../services/api';
 
 export type AppView =
-  | 'welcome'
+  | 'landing'
   | 'onboarding'
   | 'dashboard'
   | 'transactions'
@@ -49,7 +50,24 @@ export type AppView =
   | 'reports'
   | 'settings';
 
+export interface AuthUser {
+  id: string;
+  email: string;
+  name?: string;
+  mode?: string;
+}
+
 interface FinancialContextType {
+  // Auth state
+  currentUser: AuthUser | null;
+  isDemoMode: boolean;
+  isAuthLoading: boolean;
+  loginUser: (user: AuthUser, profile: any) => Promise<void>;
+  logoutUser: () => Promise<void>;
+  enterDemoMode: (mode?: UserMode) => void;
+  exitDemoMode: () => void;
+
+  // Financial Data
   profile: UserProfile;
   transactions: Transaction[];
   budgets: Budget[];
@@ -79,37 +97,37 @@ interface FinancialContextType {
   // Actions
   setMode: (mode: UserMode) => void;
   setCurrency: (currency: CurrencyCode) => void;
-  updateProfile: (profile: Partial<UserProfile>) => void;
-  completeOnboarding: (data: Partial<UserProfile>) => void;
+  updateProfile: (profile: Partial<UserProfile>) => Promise<void>;
+  completeOnboarding: (data: Partial<UserProfile>) => Promise<void>;
   resetToDemoData: (mode?: UserMode) => void;
 
   // Transactions
-  addTransaction: (tx: Omit<Transaction, 'id'>) => void;
-  editTransaction: (id: string, tx: Partial<Transaction>) => void;
-  deleteTransaction: (id: string) => void;
+  addTransaction: (tx: Omit<Transaction, 'id'>) => Promise<void>;
+  editTransaction: (id: string, tx: Partial<Transaction>) => Promise<void>;
+  deleteTransaction: (id: string) => Promise<void>;
 
   // Budgets
-  addBudget: (b: Omit<Budget, 'id'>) => void;
-  editBudget: (id: string, b: Partial<Budget>) => void;
-  deleteBudget: (id: string) => void;
-  applySuggestedBudgets: () => void;
+  addBudget: (b: Omit<Budget, 'id'>) => Promise<void>;
+  editBudget: (id: string, b: Partial<Budget>) => Promise<void>;
+  deleteBudget: (id: string) => Promise<void>;
+  applySuggestedBudgets: () => Promise<void>;
 
   // Goals
-  addGoal: (g: Omit<SavingsGoal, 'id'>) => void;
-  editGoal: (id: string, g: Partial<SavingsGoal>) => void;
-  deleteGoal: (id: string) => void;
-  logGoalContribution: (goalId: string, amount: number) => void;
-  updateGoalAllocations: (allocations: Record<string, number>) => void;
+  addGoal: (g: Omit<SavingsGoal, 'id'>) => Promise<void>;
+  editGoal: (id: string, g: Partial<SavingsGoal>) => Promise<void>;
+  deleteGoal: (id: string) => Promise<void>;
+  logGoalContribution: (goalId: string, amount: number) => Promise<void>;
+  updateGoalAllocations: (allocations: Record<string, number>) => Promise<void>;
 
   // Calendar
-  addCalendarEvent: (e: Omit<CalendarEvent, 'id'>) => void;
-  toggleEventStatus: (id: string) => void;
-  deleteCalendarEvent: (id: string) => void;
+  addCalendarEvent: (e: Omit<CalendarEvent, 'id'>) => Promise<void>;
+  toggleEventStatus: (id: string) => Promise<void>;
+  deleteCalendarEvent: (id: string) => Promise<void>;
 
   // Purchase Analyzer
   analyzePurchase: (input: PurchaseAnalysisInput) => PurchaseAnalysisResult;
-  savePurchaseAnalysis: (analysis: PurchaseAnalysisResult) => void;
-  deleteSavedAnalysis: (id: string) => void;
+  savePurchaseAnalysis: (analysis: PurchaseAnalysisResult) => Promise<void>;
+  deleteSavedAnalysis: (id: string) => Promise<void>;
 
   // Coach & Notifications
   markInsightAsRead: (id: string) => void;
@@ -119,97 +137,167 @@ interface FinancialContextType {
 
 const FinancialContext = createContext<FinancialContextType | undefined>(undefined);
 
-const STORAGE_KEY = 'pennywise_app_state_v1';
-
 export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Load initial state or defaults
-  const [profile, setProfile] = useState<UserProfile>(() => {
+  // Auth & Session
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+
+  // Core Financial Entities
+  const [profile, setProfile] = useState<UserProfile>(CAMPUS_SAMPLE_PROFILE);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [goals, setGoals] = useState<SavingsGoal[]>([]);
+  const [events, setEvents] = useState<CalendarEvent[]>([]);
+  const [insights, setInsights] = useState<CoachInsight[]>([]);
+  const [savedAnalyses, setSavedAnalyses] = useState<PurchaseAnalysisResult[]>([]);
+
+  // Current view
+  const [currentView, setCurrentView] = useState<AppView>('landing');
+
+  // Load User Data from Backend
+  const loadUserDataFromBackend = async () => {
     try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_profile`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
+      const data = await api.financials.getAll();
+      if (data.profile) {
+        setProfile({
+          name: data.profile.name || 'User',
+          mode: data.profile.mode || 'campus',
+          currency: data.profile.currency || 'INR',
+          avatar:
+            data.profile.mode === 'campus'
+              ? CAMPUS_SAMPLE_PROFILE.avatar
+              : PRO_SAMPLE_PROFILE.avatar,
+          collegeOrCompany: data.profile.college_or_company || '',
+          startingBalance: Number(data.profile.starting_balance) || 0,
+          monthlyIncomeOrAllowance: Number(data.profile.monthly_income) || 0,
+          incomeSource: data.profile.income_source || '',
+          allowanceFrequency: data.profile.allowance_frequency || 'monthly',
+          budgetPreference: data.profile.budget_preference || 'monthly',
+          onboardingCompleted: Boolean(data.profile.onboarding_completed),
+        });
+
+        if (!data.profile.onboarding_completed) {
+          setCurrentView('onboarding');
+        } else {
+          setCurrentView('dashboard');
+        }
+      }
+
+      setTransactions(data.transactions || []);
+      setBudgets(data.budgets || []);
+      setGoals(data.goals || []);
+      setEvents(data.events || []);
+      setSavedAnalyses(data.wishlist || []);
+      setInsights([]); // Personal users start with fresh, rule-derived insights
+    } catch (err) {
+      console.error('Failed to load user financial data:', err);
     }
-    return CAMPUS_SAMPLE_PROFILE;
-  });
+  };
 
-  const [transactions, setTransactions] = useState<Transaction[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_transactions`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return CAMPUS_SAMPLE_TRANSACTIONS;
-  });
-
-  const [budgets, setBudgets] = useState<Budget[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_budgets`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return CAMPUS_SAMPLE_BUDGETS;
-  });
-
-  const [goals, setGoals] = useState<SavingsGoal[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_goals`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return CAMPUS_SAMPLE_GOALS;
-  });
-
-  const [events, setEvents] = useState<CalendarEvent[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_events`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return CAMPUS_SAMPLE_EVENTS;
-  });
-
-  const [insights, setInsights] = useState<CoachInsight[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_insights`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return CAMPUS_SAMPLE_INSIGHTS;
-  });
-
-  const [savedAnalyses, setSavedAnalyses] = useState<PurchaseAnalysisResult[]>(() => {
-    try {
-      const stored = localStorage.getItem(`${STORAGE_KEY}_analyses`);
-      if (stored) return JSON.parse(stored);
-    } catch (e) {
-      console.error(e);
-    }
-    return [];
-  });
-
-  // Current screen
-  const [currentView, setCurrentView] = useState<AppView>('dashboard');
-
-  // Sync to local storage
+  // Restore session on mount
   useEffect(() => {
-    try {
-      localStorage.setItem(`${STORAGE_KEY}_profile`, JSON.stringify(profile));
-      localStorage.setItem(`${STORAGE_KEY}_transactions`, JSON.stringify(transactions));
-      localStorage.setItem(`${STORAGE_KEY}_budgets`, JSON.stringify(budgets));
-      localStorage.setItem(`${STORAGE_KEY}_goals`, JSON.stringify(goals));
-      localStorage.setItem(`${STORAGE_KEY}_events`, JSON.stringify(events));
-      localStorage.setItem(`${STORAGE_KEY}_insights`, JSON.stringify(insights));
-      localStorage.setItem(`${STORAGE_KEY}_analyses`, JSON.stringify(savedAnalyses));
-    } catch (e) {
-      console.error('Failed to sync to local storage', e);
+    async function restoreSession() {
+      try {
+        const { user } = await api.auth.getMe();
+        if (user) {
+          setCurrentUser(user);
+          setIsDemoMode(false);
+          await loadUserDataFromBackend();
+        } else {
+          setCurrentUser(null);
+          setCurrentView('landing');
+        }
+      } catch (err) {
+        console.warn('Session restoration failed or backend offline:', err);
+        setCurrentUser(null);
+        setCurrentView('landing');
+      } finally {
+        setIsAuthLoading(false);
+      }
     }
-  }, [profile, transactions, budgets, goals, events, insights, savedAnalyses]);
+    restoreSession();
+  }, []);
+
+  // Enter Demo Mode (strictly isolated sample data, no database writes)
+  const enterDemoMode = (targetMode: UserMode = 'campus') => {
+    setIsDemoMode(true);
+    setCurrentUser(null);
+    if (targetMode === 'campus') {
+      setProfile(CAMPUS_SAMPLE_PROFILE);
+      setTransactions(CAMPUS_SAMPLE_TRANSACTIONS);
+      setBudgets(CAMPUS_SAMPLE_BUDGETS);
+      setGoals(CAMPUS_SAMPLE_GOALS);
+      setEvents(CAMPUS_SAMPLE_EVENTS);
+      setInsights(CAMPUS_SAMPLE_INSIGHTS);
+    } else {
+      setProfile(PRO_SAMPLE_PROFILE);
+      setTransactions(PRO_SAMPLE_TRANSACTIONS);
+      setBudgets(PRO_SAMPLE_BUDGETS);
+      setGoals(PRO_SAMPLE_GOALS);
+      setEvents(PRO_SAMPLE_EVENTS);
+      setInsights(PRO_SAMPLE_INSIGHTS);
+    }
+    setSavedAnalyses([]);
+    setCurrentView('dashboard');
+  };
+
+  // Exit Demo Mode and return to Landing Page
+  const exitDemoMode = () => {
+    setIsDemoMode(false);
+    setCurrentView('landing');
+  };
+
+  // Log in user
+  const loginUser = async (user: AuthUser, initialProfile: any) => {
+    setIsDemoMode(false);
+    setCurrentUser(user);
+    if (initialProfile) {
+      setProfile({
+        name: initialProfile.name || user.name || 'User',
+        mode: initialProfile.mode || 'campus',
+        currency: initialProfile.currency || 'INR',
+        avatar:
+          initialProfile.mode === 'campus'
+            ? CAMPUS_SAMPLE_PROFILE.avatar
+            : PRO_SAMPLE_PROFILE.avatar,
+        collegeOrCompany: initialProfile.college_or_company || '',
+        startingBalance: Number(initialProfile.starting_balance) || 0,
+        monthlyIncomeOrAllowance: Number(initialProfile.monthly_income) || 0,
+        incomeSource: initialProfile.income_source || '',
+        allowanceFrequency: initialProfile.allowance_frequency || 'monthly',
+        budgetPreference: initialProfile.budget_preference || 'monthly',
+        onboardingCompleted: Boolean(initialProfile.onboarding_completed),
+      });
+
+      if (!initialProfile.onboarding_completed) {
+        setCurrentView('onboarding');
+      } else {
+        await loadUserDataFromBackend();
+        setCurrentView('dashboard');
+      }
+    } else {
+      await loadUserDataFromBackend();
+    }
+  };
+
+  // Log out user
+  const logoutUser = async () => {
+    try {
+      await api.auth.logout();
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setCurrentUser(null);
+      setIsDemoMode(false);
+      setTransactions([]);
+      setBudgets([]);
+      setGoals([]);
+      setEvents([]);
+      setInsights([]);
+      setCurrentView('landing');
+    }
+  };
 
   // Derived Calculations
   const currentBalance = useMemo(() => {
@@ -271,7 +359,6 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
 
   // Dynamic Rule-Based Coach Insights Generation
   useEffect(() => {
-    // Check if any budget is over limit or approaching limit
     const overBudgets = budgetsProgress.filter(b => b.status === 'over');
     if (overBudgets.length > 0) {
       const topOver = overBudgets[0];
@@ -296,67 +383,82 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   }, [budgetsProgress]);
 
   // Actions
-  const setMode = (mode: UserMode) => {
+  const setMode = async (mode: UserMode) => {
     if (mode === profile.mode) return;
-    if (mode === 'campus') {
-      setProfile(prev => ({
-        ...prev,
-        mode: 'campus',
-        currency: 'INR',
-        monthlyIncomeOrAllowance: 16000,
-        startingBalance: 12450,
-      }));
-    } else {
-      setProfile(prev => ({
-        ...prev,
-        mode: 'pro',
-        currency: 'USD',
-        monthlyIncomeOrAllowance: 7200,
-        startingBalance: 18450,
-      }));
+    const updated = { ...profile, mode };
+    if (!isDemoMode && currentUser) {
+      await api.financials.updateProfile({ mode });
     }
+    setProfile(updated);
   };
 
-  const setCurrency = (currency: CurrencyCode) => {
+  const setCurrency = async (currency: CurrencyCode) => {
+    if (!isDemoMode && currentUser) {
+      await api.financials.updateProfile({ currency });
+    }
     setProfile(prev => ({ ...prev, currency }));
   };
 
-  const updateProfile = (partial: Partial<UserProfile>) => {
-    setProfile(prev => ({ ...prev, ...partial }));
+  const updateProfile = async (partial: Partial<UserProfile>) => {
+    const updated = { ...profile, ...partial };
+    if (!isDemoMode && currentUser) {
+      await api.financials.updateProfile({
+        name: updated.name,
+        mode: updated.mode,
+        currency: updated.currency,
+        college_or_company: updated.collegeOrCompany,
+        starting_balance: updated.startingBalance,
+        monthly_income: updated.monthlyIncomeOrAllowance,
+        income_source: updated.incomeSource,
+        allowance_frequency: updated.allowanceFrequency,
+        budget_preference: updated.budgetPreference,
+      });
+    }
+    setProfile(updated);
   };
 
-  const completeOnboarding = (data: Partial<UserProfile>) => {
-    setProfile(prev => ({
-      ...prev,
+  const completeOnboarding = async (data: Partial<UserProfile>) => {
+    const updated: UserProfile = {
+      ...profile,
       ...data,
       onboardingCompleted: true,
-    }));
+    };
+    if (!isDemoMode && currentUser) {
+      await api.financials.updateProfile({
+        name: updated.name,
+        mode: updated.mode,
+        currency: updated.currency,
+        college_or_company: updated.collegeOrCompany,
+        starting_balance: updated.startingBalance,
+        monthly_income: updated.monthlyIncomeOrAllowance,
+        income_source: updated.incomeSource,
+        allowance_frequency: updated.allowanceFrequency,
+        budget_preference: updated.budgetPreference,
+        onboarding_completed: true,
+      });
+    }
+    setProfile(updated);
     setCurrentView('dashboard');
   };
 
   const resetToDemoData = (targetMode?: UserMode) => {
-    const mode = targetMode || profile.mode;
-    if (mode === 'campus') {
-      setProfile(CAMPUS_SAMPLE_PROFILE);
-      setTransactions(CAMPUS_SAMPLE_TRANSACTIONS);
-      setBudgets(CAMPUS_SAMPLE_BUDGETS);
-      setGoals(CAMPUS_SAMPLE_GOALS);
-      setEvents(CAMPUS_SAMPLE_EVENTS);
-      setInsights(CAMPUS_SAMPLE_INSIGHTS);
-    } else {
-      setProfile(PRO_SAMPLE_PROFILE);
-      setTransactions(PRO_SAMPLE_TRANSACTIONS);
-      setBudgets(PRO_SAMPLE_BUDGETS);
-      setGoals(PRO_SAMPLE_GOALS);
-      setEvents(PRO_SAMPLE_EVENTS);
-      setInsights(PRO_SAMPLE_INSIGHTS);
-    }
-    setSavedAnalyses([]);
-    setCurrentView('dashboard');
+    enterDemoMode(targetMode || profile.mode);
   };
 
   // Transactions
-  const addTransaction = (tx: Omit<Transaction, 'id'>) => {
+  const addTransaction = async (tx: Omit<Transaction, 'id'>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.addTransaction(tx);
+        setTransactions(prev => [saved, ...prev]);
+        return;
+      } catch (err) {
+        console.error('Failed to save transaction to backend:', err);
+        throw err;
+      }
+    }
+
+    // Demo / fallback local
     const newTx: Transaction = {
       ...tx,
       id: `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
@@ -364,36 +466,90 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     setTransactions(prev => [newTx, ...prev]);
   };
 
-  const editTransaction = (id: string, updated: Partial<Transaction>) => {
+  const editTransaction = async (id: string, updated: Partial<Transaction>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.editTransaction(id, updated);
+        setTransactions(prev => prev.map(t => (t.id === id ? saved : t)));
+        return;
+      } catch (err) {
+        console.error('Failed to update transaction in backend:', err);
+        throw err;
+      }
+    }
     setTransactions(prev => prev.map(t => (t.id === id ? { ...t, ...updated } : t)));
   };
 
-  const deleteTransaction = (id: string) => {
+  const deleteTransaction = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.deleteTransaction(id);
+      } catch (err) {
+        console.error('Failed to delete transaction from backend:', err);
+        throw err;
+      }
+    }
     setTransactions(prev => prev.filter(t => t.id !== id));
   };
 
   // Budgets
-  const addBudget = (b: Omit<Budget, 'id'>) => {
-    const newBudget: Budget = {
-      ...b,
-      id: `b-${Date.now()}`,
-    };
+  const addBudget = async (b: Omit<Budget, 'id'>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.addBudget(b);
+        setBudgets(prev => [...prev, saved]);
+        return;
+      } catch (err) {
+        console.error('Failed to add budget to backend:', err);
+        throw err;
+      }
+    }
+    const newBudget: Budget = { ...b, id: `b-${Date.now()}` };
     setBudgets(prev => [...prev, newBudget]);
   };
 
-  const editBudget = (id: string, updated: Partial<Budget>) => {
+  const editBudget = async (id: string, updated: Partial<Budget>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.editBudget(id, updated);
+      } catch (err) {
+        console.error('Failed to edit budget in backend:', err);
+        throw err;
+      }
+    }
     setBudgets(prev => prev.map(b => (b.id === id ? { ...b, ...updated } : b)));
   };
 
-  const deleteBudget = (id: string) => {
+  const deleteBudget = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.deleteBudget(id);
+      } catch (err) {
+        console.error('Failed to delete budget from backend:', err);
+        throw err;
+      }
+    }
     setBudgets(prev => prev.filter(b => b.id !== id));
   };
 
-  const applySuggestedBudgets = () => {
+  const applySuggestedBudgets = async () => {
+    if (budgets.length > 0 && !window.confirm(`Replace all ${budgets.length} existing budgets with the suggested set? Existing budget limits will be removed.`)) return;
     const suggestions = generateSmartBudgets(
       profile.monthlyIncomeOrAllowance,
       profile.mode
     );
+
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.applyBatchBudgets(suggestions);
+        setBudgets(saved);
+        return;
+      } catch (err) {
+        console.error('Failed to apply batch budgets in backend:', err);
+        throw err;
+      }
+    }
+
     const newBudgets: Budget[] = suggestions.map((s, idx) => ({
       id: `b-sug-${Date.now()}-${idx}`,
       category: s.category,
@@ -404,27 +560,78 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Goals
-  const addGoal = (g: Omit<SavingsGoal, 'id'>) => {
-    const newGoal: SavingsGoal = {
-      ...g,
-      id: `g-${Date.now()}`,
-    };
+  const addGoal = async (g: Omit<SavingsGoal, 'id'>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.addGoal(g);
+        setGoals(prev => [...prev, saved]);
+        return;
+      } catch (err) {
+        console.error('Failed to add goal to backend:', err);
+        throw err;
+      }
+    }
+    const newGoal: SavingsGoal = { ...g, id: `g-${Date.now()}` };
     setGoals(prev => [...prev, newGoal]);
   };
 
-  const editGoal = (id: string, updated: Partial<SavingsGoal>) => {
+  const editGoal = async (id: string, updated: Partial<SavingsGoal>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.editGoal(id, updated);
+        setGoals(prev => prev.map(g => (g.id === id ? saved : g)));
+        return;
+      } catch (err) {
+        console.error('Failed to edit goal in backend:', err);
+        throw err;
+      }
+    }
     setGoals(prev => prev.map(g => (g.id === id ? { ...g, ...updated } : g)));
   };
 
-  const deleteGoal = (id: string) => {
+  const deleteGoal = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.deleteGoal(id);
+      } catch (err) {
+        console.error('Failed to delete goal from backend:', err);
+        throw err;
+      }
+    }
     setGoals(prev => prev.filter(g => g.id !== id));
   };
 
-  const logGoalContribution = (goalId: string, amount: number) => {
+  const logGoalContribution = async (goalId: string, amount: number) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const result = await api.financials.depositGoal(goalId, amount);
+        const goal = goals.find(g => g.id === goalId);
+        if (goal) {
+          setGoals(prev => prev.map(g => g.id === goalId ? { ...g, currentAmount: result.currentAmount } : g));
+          const today = new Date();
+          const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          setTransactions(prev => [{
+            id: result.transactionId,
+            amount,
+            currency: profile.currency,
+            category: profile.mode === 'campus' ? 'Hostel & Living' : 'Investments & Savings',
+            date,
+            type: 'expense',
+            paymentMethod: 'Bank Transfer',
+            description: `Goal Deposit: ${goal.name}`,
+          }, ...prev]);
+        }
+        return;
+      } catch (err) {
+        console.error('Failed to deposit to goal in backend:', err);
+        throw err;
+      }
+    }
+
+    // Demo mode local state update
     setGoals(prev =>
       prev.map(g => (g.id === goalId ? { ...g, currentAmount: g.currentAmount + amount } : g))
     );
-    // Add transaction record as an investment / savings expense
     const goal = goals.find(g => g.id === goalId);
     if (goal) {
       addTransaction({
@@ -439,7 +646,15 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
   };
 
-  const updateGoalAllocations = (allocations: Record<string, number>) => {
+  const updateGoalAllocations = async (allocations: Record<string, number>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.updateGoalAllocations(allocations);
+      } catch (err) {
+        console.error('Failed to update goal allocations in backend:', err);
+        throw err;
+      }
+    }
     setGoals(prev =>
       prev.map(g => {
         if (allocations[g.id] !== undefined) {
@@ -451,15 +666,34 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   };
 
   // Calendar
-  const addCalendarEvent = (e: Omit<CalendarEvent, 'id'>) => {
-    const newEvent: CalendarEvent = {
-      ...e,
-      id: `ev-${Date.now()}`,
-    };
+  const addCalendarEvent = async (e: Omit<CalendarEvent, 'id'>) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const saved = await api.financials.addCalendarEvent(e);
+        setEvents(prev => [...prev, saved]);
+        return;
+      } catch (err) {
+        console.error('Failed to add calendar event to backend:', err);
+        throw err;
+      }
+    }
+    const newEvent: CalendarEvent = { ...e, id: `ev-${Date.now()}` };
     setEvents(prev => [...prev, newEvent]);
   };
 
-  const toggleEventStatus = (id: string) => {
+  const toggleEventStatus = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        const res = await api.financials.toggleCalendarEvent(id);
+        setEvents(prev =>
+          prev.map(e => (e.id === id ? { ...e, status: res.status as any } : e))
+        );
+        return;
+      } catch (err) {
+        console.error('Failed to toggle event in backend:', err);
+        throw err;
+      }
+    }
     setEvents(prev =>
       prev.map(e => {
         if (e.id === id) {
@@ -471,7 +705,15 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
-  const deleteCalendarEvent = (id: string) => {
+  const deleteCalendarEvent = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.deleteCalendarEvent(id);
+      } catch (err) {
+        console.error('Failed to delete calendar event from backend:', err);
+        throw err;
+      }
+    }
     setEvents(prev => prev.filter(e => e.id !== id));
   };
 
@@ -486,11 +728,33 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
     );
   };
 
-  const savePurchaseAnalysis = (analysis: PurchaseAnalysisResult) => {
+  const savePurchaseAnalysis = async (analysis: PurchaseAnalysisResult) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.saveWishlist({
+          itemName: analysis.input.name,
+          amount: analysis.input.amount,
+          category: analysis.input.category,
+          score: analysis.score,
+          recommendation: analysis.recommendation,
+        });
+      } catch (err) {
+        console.error('Failed to save analysis to backend wishlist:', err);
+        throw err;
+      }
+    }
     setSavedAnalyses(prev => [analysis, ...prev]);
   };
 
-  const deleteSavedAnalysis = (id: string) => {
+  const deleteSavedAnalysis = async (id: string) => {
+    if (!isDemoMode && currentUser) {
+      try {
+        await api.financials.deleteWishlist(id);
+      } catch (err) {
+        console.error('Failed to delete wishlist item from backend:', err);
+        throw err;
+      }
+    }
     setSavedAnalyses(prev => prev.filter(a => a.id !== id));
   };
 
@@ -510,6 +774,13 @@ export const FinancialProvider: React.FC<{ children: ReactNode }> = ({ children 
   return (
     <FinancialContext.Provider
       value={{
+        currentUser,
+        isDemoMode,
+        isAuthLoading,
+        loginUser,
+        logoutUser,
+        enterDemoMode,
+        exitDemoMode,
         profile,
         transactions,
         budgets,

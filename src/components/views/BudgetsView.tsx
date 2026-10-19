@@ -20,6 +20,8 @@ export const BudgetsView: React.FC = () => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingBudget, setEditingBudget] = useState<Budget | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // New Budget Form State
   const [category, setCategory] = useState(categories[0]?.name || 'Other');
@@ -31,23 +33,33 @@ export const BudgetsView: React.FC = () => {
   const totalSpent = budgetsProgress.reduce((sum, b) => sum + b.spent, 0);
   const overallPercentage = totalAllocated > 0 ? Math.round((totalSpent / totalAllocated) * 100) : 0;
 
-  const handleCreateBudget = (e: React.FormEvent) => {
+  const handleCreateBudget = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedLimit = parseFloat(limit);
     if (isNaN(parsedLimit) || parsedLimit <= 0) return;
 
-    addBudget({
-      category,
-      limit: parsedLimit,
-      period,
-    });
+    setSaving(true);
+    setActionError('');
+    try {
+      await addBudget({ category, limit: parsedLimit, period });
+      setIsAddModalOpen(false);
+      setLimit('');
+    } catch {
+      setActionError('Could not save this budget. Your entries are still here; please retry.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
-    setIsAddModalOpen(false);
-    setLimit('');
+  const handleSuggestions = async () => {
+    setActionError('');
+    try { await applySuggestedBudgets(); }
+    catch { setActionError('Could not apply the suggested budgets. Your current budgets are unchanged; please retry.'); }
   };
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
+      {actionError && <p role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-semantic-error/40 bg-[#151E38] p-3 text-xs text-semantic-error shadow-xl">{actionError}</p>}
       {/* Top Banner Card */}
       <div className="p-6 rounded-3xl bg-midnight-surface/80 border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -59,7 +71,7 @@ export const BudgetsView: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2.5">
           <button
-            onClick={applySuggestedBudgets}
+            onClick={handleSuggestions}
             className="px-3.5 py-2 rounded-xl bg-midnight-elevated hover:bg-midnight-hover border border-turquoise/30 text-xs font-semibold text-turquoise transition-all flex items-center gap-1.5 shadow-sm"
           >
             <Icon name="Wand2" size={14} />
@@ -109,25 +121,54 @@ export const BudgetsView: React.FC = () => {
       </div>
 
       {/* Category Budget Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {budgetsProgress.map(b => {
-          const isOver = b.status === 'over';
-          const isWarning = b.status === 'warning';
-
-          return (
-            <div
-              key={b.id}
-              className={`p-5 rounded-2xl bg-midnight-surface/80 border transition-all ${
-                isOver
-                  ? 'border-semantic-error/40 shadow-sm'
-                  : isWarning
-                  ? 'border-semantic-warning/40 shadow-sm'
-                  : 'border-white/10 hover:border-turquoise/30'
-              }`}
+      {budgetsProgress.length === 0 ? (
+        <div className="p-12 rounded-3xl bg-midnight-surface/80 border border-white/10 text-center space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-lavender/10 text-lavender flex items-center justify-center">
+            <Icon name="PieChart" size={28} />
+          </div>
+          <div className="max-w-md mx-auto space-y-1">
+            <h3 className="text-base font-bold text-text-primary">No budget categories set</h3>
+            <p className="text-xs text-text-muted">
+              Configure category spending caps to protect your Available-to-Spend balance and get proactive warnings before overspending.
+            </p>
+          </div>
+          <div className="flex flex-wrap justify-center gap-3 pt-2">
+            <button
+              onClick={handleSuggestions}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-turquoise/20 to-turquoise/5 hover:from-turquoise/30 border border-turquoise/40 text-xs font-bold text-turquoise transition-all flex items-center gap-2"
             >
-              {/* Category Header */}
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2.5">
+              <Icon name="Wand2" size={14} />
+              Generate Smart Suggestions
+            </button>
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-4 py-2 rounded-xl bg-midnight-elevated hover:bg-midnight-hover border border-white/10 text-xs font-semibold text-text-primary transition-all flex items-center gap-2"
+            >
+              <Icon name="Plus" size={14} />
+              Create Custom Budget
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {budgetsProgress.map(b => {
+            const isOver = b.status === 'over';
+            const isWarning = b.status === 'warning';
+
+            return (
+              <div
+                key={b.id}
+                className={`p-5 rounded-2xl bg-midnight-surface/80 border transition-all ${
+                  isOver
+                    ? 'border-semantic-error/40 shadow-sm'
+                    : isWarning
+                    ? 'border-semantic-warning/40 shadow-sm'
+                    : 'border-white/10 hover:border-turquoise/30'
+                }`}
+              >
+                {/* Category Header */}
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2.5">
                   <div
                     className={`p-2 rounded-xl ${
                       isOver
@@ -156,7 +197,11 @@ export const BudgetsView: React.FC = () => {
                     <Icon name="Pencil" size={13} />
                   </button>
                   <button
-                    onClick={() => deleteBudget(b.id)}
+                    onClick={async () => {
+                      setActionError('');
+                      try { await deleteBudget(b.id); }
+                      catch { setActionError('Could not delete this budget. Please retry.'); }
+                    }}
                     className="p-1.5 text-text-muted hover:text-semantic-error rounded-lg"
                     title="Delete Budget"
                   >
@@ -218,16 +263,18 @@ export const BudgetsView: React.FC = () => {
                   {isOver ? 'Over Budget' : isWarning ? 'Approaching Limit' : 'Healthy'}
                 </span>
               </div>
-            </div>
-          );
-        })}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Add Budget Modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
           <div className="w-full max-w-md rounded-2xl bg-[#151E38] border border-white/10 p-6 shadow-2xl relative text-text-primary">
             <h3 className="text-base font-bold mb-4">Create Category Budget</h3>
+            {actionError && <p role="alert" className="mb-3 text-xs text-semantic-error">{actionError}</p>}
             <form onSubmit={handleCreateBudget} className="space-y-4 text-xs">
               <div>
                 <label className="block text-text-secondary mb-1">Category</label>
@@ -279,6 +326,7 @@ export const BudgetsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Save Budget
@@ -295,13 +343,22 @@ export const BudgetsView: React.FC = () => {
           <div className="w-full max-w-md rounded-2xl bg-[#151E38] border border-white/10 p-6 shadow-2xl relative text-text-primary">
             <h3 className="text-base font-bold mb-4">Edit Budget: {editingBudget.category}</h3>
             <form
-              onSubmit={e => {
+              onSubmit={async e => {
                 e.preventDefault();
-                editBudget(editingBudget.id, editingBudget);
-                setEditingBudget(null);
+                setSaving(true);
+                setActionError('');
+                try {
+                  await editBudget(editingBudget.id, editingBudget);
+                  setEditingBudget(null);
+                } catch {
+                  setActionError('Could not update this budget. Your changes are still here; please retry.');
+                } finally {
+                  setSaving(false);
+                }
               }}
               className="space-y-4 text-xs"
             >
+              {actionError && <p role="alert" className="text-semantic-error">{actionError}</p>}
               <div>
                 <label className="block text-text-secondary mb-1">Spending Limit ({currency})</label>
                 <input
@@ -329,6 +386,7 @@ export const BudgetsView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Update Limit
@@ -341,3 +399,4 @@ export const BudgetsView: React.FC = () => {
     </div>
   );
 };
+

@@ -3,8 +3,9 @@ import { FinancialProvider, useFinancial } from './context/FinancialContext';
 import { Sidebar } from './components/layout/Sidebar';
 import { TopHeader } from './components/layout/TopHeader';
 import { MobileNavigation } from './components/layout/MobileNavigation';
-import { WelcomeScreen } from './components/onboarding/WelcomeScreen';
-import { OnboardingWizard } from './components/onboarding/OnboardingWizard';
+import { LandingPage } from './components/landing/LandingPage';
+import { AuthModal } from './components/auth/AuthModal';
+import { PersonalOnboarding } from './components/onboarding/PersonalOnboarding';
 import { DashboardView } from './components/views/DashboardView';
 import { TransactionsView } from './components/views/TransactionsView';
 import { BudgetsView } from './components/views/BudgetsView';
@@ -15,14 +16,28 @@ import { ReportsView } from './components/views/ReportsView';
 import { SettingsView } from './components/views/SettingsView';
 import { QuickAddModal } from './components/modals/QuickAddModal';
 import { PurchaseAnalyzerModal } from './components/modals/PurchaseAnalyzerModal';
-import { TransactionType, UserMode } from './types';
+import { TransactionType } from './types';
+import { Icon } from './components/common/Icon';
 
 const MainApp: React.FC = () => {
-  const { profile, currentView, setCurrentView, resetToDemoData } = useFinancial();
+  const {
+    currentUser,
+    isDemoMode,
+    isAuthLoading,
+    loginUser,
+    enterDemoMode,
+    exitDemoMode,
+    profile,
+    currentView,
+    setCurrentView,
+    completeOnboarding,
+    addCalendarEvent,
+    addGoal,
+  } = useFinancial();
 
-  // Onboarding flow states
-  const [isOnboardingActive, setIsOnboardingActive] = useState(false);
-  const [onboardingMode, setOnboardingMode] = useState<UserMode>('campus');
+  // Auth Modal State
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authModalMode, setAuthModalMode] = useState<'login' | 'signup'>('signup');
 
   // Global Modals
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
@@ -37,82 +52,175 @@ const MainApp: React.FC = () => {
     setIsQuickAddOpen(true);
   };
 
-  // If onboarding is not completed yet, show welcome or onboarding
-  if (!profile.onboardingCompleted && !isOnboardingActive) {
+  // If restoring session
+  if (isAuthLoading) {
     return (
-      <WelcomeScreen
-        onStartOnboarding={mode => {
-          setOnboardingMode(mode);
-          setIsOnboardingActive(true);
-        }}
-        onExploreDemo={mode => {
-          resetToDemoData(mode);
-        }}
-      />
+      <div className="min-h-screen bg-[#10172E] text-[#F1F3FA] flex flex-col items-center justify-center p-4">
+        <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-turquoise to-lavender p-0.5 shadow-glow-turquoise animate-pulse mb-4">
+          <div className="w-full h-full bg-[#10172E] rounded-[14px] flex items-center justify-center font-bold text-sm text-turquoise">
+            PW
+          </div>
+        </div>
+        <p className="text-xs text-[#A7B0C8] font-mono">Restoring secure session...</p>
+      </div>
     );
   }
 
-  if (isOnboardingActive) {
+  // If on public landing page and not signed in or in demo mode
+  if (currentView === 'landing' && !currentUser && !isDemoMode) {
     return (
-      <OnboardingWizard
-        initialMode={onboardingMode}
-        onComplete={() => setIsOnboardingActive(false)}
-        onCancel={() => {
-          resetToDemoData(onboardingMode);
-          setIsOnboardingActive(false);
+      <>
+        <LandingPage
+          onGetStarted={() => {
+            setAuthModalMode('signup');
+            setIsAuthModalOpen(true);
+          }}
+          onLogIn={() => {
+            setAuthModalMode('login');
+            setIsAuthModalOpen(true);
+          }}
+          onExploreDemo={() => enterDemoMode('campus')}
+        />
+
+        <AuthModal
+          isOpen={isAuthModalOpen}
+          onClose={() => setIsAuthModalOpen(false)}
+          initialMode={authModalMode}
+          onAuthSuccess={(user, userProfile) => loginUser(user, userProfile)}
+        />
+      </>
+    );
+  }
+
+  // If logged in but onboarding is not completed yet
+  if (currentUser && !profile.onboardingCompleted) {
+    return (
+      <PersonalOnboarding
+        initialName={profile.name || currentUser.name || 'User'}
+        initialMode={profile.mode}
+        onFinish={async data => {
+          await completeOnboarding({
+            name: profile.name,
+            mode: data.mode,
+            currency: data.currency,
+            collegeOrCompany: data.collegeOrCompany,
+            startingBalance: data.startingBalance,
+            monthlyIncomeOrAllowance: data.monthlyIncome,
+            incomeSource: data.incomeSource,
+            allowanceFrequency: data.allowanceFrequency,
+            onboardingCompleted: true,
+          });
+
+          // If user added initial commitment in onboarding
+          if (data.initialCommitment) {
+            await addCalendarEvent({
+              title: data.initialCommitment.title,
+              amount: data.initialCommitment.amount,
+              type: 'bill',
+              date: data.initialCommitment.date,
+              status: 'upcoming',
+            });
+          }
+
+          // If user added initial savings goal in onboarding
+          if (data.initialGoal) {
+            await addGoal({
+              name: data.initialGoal.name,
+              targetAmount: data.initialGoal.targetAmount,
+              currentAmount: 0,
+              targetDate: data.initialGoal.targetDate,
+              priority: 'High',
+              plannedMonthlyContribution: data.initialGoal.plannedMonthly,
+              icon: data.mode === 'campus' ? 'Laptop' : 'ShieldCheck',
+              category: data.mode === 'campus' ? 'Tech & Gadgets' : 'Investments & Savings',
+            });
+          }
         }}
       />
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#10172E] text-text-primary flex">
-      {/* Desktop Persistent Sidebar */}
-      <Sidebar
-        onOpenQuickAdd={() => handleOpenQuickAdd('expense')}
-        onOpenAnalyzer={() => setIsAnalyzerOpen(true)}
-      />
+    <div className="min-h-screen bg-[#10172E] text-text-primary flex flex-col">
+      {/* Persistent Demo Mode Banner */}
+      {isDemoMode && (
+        <div className="bg-gradient-to-r from-[#1B2645] via-[#223055] to-[#1B2645] border-b border-turquoise/30 px-4 py-2 text-xs text-[#F1F3FA] flex flex-wrap items-center justify-between gap-2 z-40 sticky top-0 shadow-md">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-turquoise animate-ping" />
+            <span className="font-semibold text-turquoise">DEMO MODE:</span>
+            <span className="text-[#A7B0C8]">
+              Exploring fictional sample data. Changes stay in memory and are not saved.
+            </span>
+          </div>
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
-        <TopHeader
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setAuthModalMode('signup');
+                setIsAuthModalOpen(true);
+              }}
+              className="px-3 py-1 rounded-lg bg-turquoise text-[#10172E] font-bold text-[11px] hover:shadow-glow-turquoise transition-all"
+            >
+              Create My Personal Account
+            </button>
+            <button
+              onClick={exitDemoMode}
+              className="text-[#A7B0C8] hover:text-[#F1F3FA] text-[11px] underline"
+            >
+              Exit to Landing Page
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="flex-1 flex">
+        {/* Desktop Persistent Sidebar */}
+        <Sidebar
           onOpenQuickAdd={() => handleOpenQuickAdd('expense')}
-          onOpenMobileMenu={() => setIsMobileDrawerOpen(true)}
+          onOpenAnalyzer={() => setIsAnalyzerOpen(true)}
         />
 
-        <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
-          {currentView === 'dashboard' && (
-            <DashboardView
-              onOpenQuickAdd={handleOpenQuickAdd}
-              onOpenAnalyzer={() => setIsAnalyzerOpen(true)}
-            />
-          )}
+        {/* Main Content Area */}
+        <div className="flex-1 flex flex-col min-w-0 pb-16 lg:pb-0">
+          <TopHeader
+            onOpenQuickAdd={() => handleOpenQuickAdd('expense')}
+            onOpenMobileMenu={() => setIsMobileDrawerOpen(true)}
+          />
 
-          {currentView === 'transactions' && (
-            <TransactionsView onOpenQuickAdd={handleOpenQuickAdd} />
-          )}
-
-          {currentView === 'budgets' && <BudgetsView />}
-
-          {currentView === 'goals' && <SavingsGoalsStudio />}
-
-          {currentView === 'calendar' && <FinancialCalendarView />}
-
-          {currentView === 'coach' && <MoneyCoachView />}
-
-          {currentView === 'analyzer' && (
-            <div className="py-6">
-              <PurchaseAnalyzerModal
-                isOpen={true}
-                onClose={() => setCurrentView('dashboard')}
+          <main className="flex-1 p-4 md:p-6 lg:p-8 max-w-7xl w-full mx-auto">
+            {currentView === 'dashboard' && (
+              <DashboardView
+                onOpenQuickAdd={handleOpenQuickAdd}
+                onOpenAnalyzer={() => setIsAnalyzerOpen(true)}
               />
-            </div>
-          )}
+            )}
 
-          {currentView === 'reports' && <ReportsView />}
+            {currentView === 'transactions' && (
+              <TransactionsView onOpenQuickAdd={handleOpenQuickAdd} />
+            )}
 
-          {currentView === 'settings' && <SettingsView />}
-        </main>
+            {currentView === 'budgets' && <BudgetsView />}
+
+            {currentView === 'goals' && <SavingsGoalsStudio />}
+
+            {currentView === 'calendar' && <FinancialCalendarView />}
+
+            {currentView === 'coach' && <MoneyCoachView />}
+
+            {currentView === 'analyzer' && (
+              <div className="py-6">
+                <PurchaseAnalyzerModal
+                  isOpen={true}
+                  onClose={() => setCurrentView('dashboard')}
+                />
+              </div>
+            )}
+
+            {currentView === 'reports' && <ReportsView />}
+
+            {currentView === 'settings' && <SettingsView />}
+          </main>
+        </div>
       </div>
 
       {/* Mobile Navigation Drawer & Bottom Bar */}
@@ -130,10 +238,18 @@ const MainApp: React.FC = () => {
         defaultType={quickAddType}
       />
 
-      {/* Purchase Analyzer Modal (When invoked from shortcut or button) */}
+      {/* Purchase Analyzer Modal */}
       <PurchaseAnalyzerModal
         isOpen={isAnalyzerOpen}
         onClose={() => setIsAnalyzerOpen(false)}
+      />
+
+      {/* Auth Modal (if opened from top header or demo banner) */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        initialMode={authModalMode}
+        onAuthSuccess={(user, userProfile) => loginUser(user, userProfile)}
       />
     </div>
   );

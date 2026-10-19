@@ -70,16 +70,24 @@ export function calculateBudgetsProgress(
 ): BudgetProgress[] {
   // Get expenses for current month
   const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+  const monthStart = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+  const nextMonthStart = month === 11 ? `${year + 1}-01-01` : `${year}-${String(month + 2).padStart(2, '0')}-01`;
+  const semesterStartMonth = Math.floor(month / 6) * 6;
+  const periodStart = `${year}-${String(semesterStartMonth + 1).padStart(2, '0')}-01`;
+  const periodEnd = semesterStartMonth === 6 ? `${year + 1}-01-01` : `${year}-${String(semesterStartMonth + 7).padStart(2, '0')}-01`;
+  const tomorrow = new Date(year, month, now.getDate() + 1);
+  const todayExclusive = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
 
   return budgets.map(budget => {
     const spent = transactions
       .filter(t => {
         if (t.type !== 'expense') return false;
         if (t.category.toLowerCase() !== budget.category.toLowerCase()) return false;
-        const txDate = new Date(t.date);
-        return txDate.getFullYear() === currentYear && txDate.getMonth() === currentMonth;
+        const start = budget.period === 'semester' ? periodStart : monthStart;
+        const end = [budget.period === 'semester' ? periodEnd : nextMonthStart, todayExclusive].sort()[0];
+        return t.date >= start && t.date < end;
       })
       .reduce((sum, t) => sum + t.amount, 0);
 
@@ -111,26 +119,31 @@ export function calculateGoalProjections(goals: SavingsGoal[]): SavingsGoalProje
 
   return goals.map(goal => {
     const remainingToSave = Math.max(0, goal.targetAmount - goal.currentAmount);
-    const monthlyContribution = Math.max(1, goal.plannedMonthlyContribution);
+    const monthlyContribution = Math.max(0, goal.plannedMonthlyContribution);
 
-    const targetDate = new Date(goal.targetDate);
+    const [targetYear, targetMonth] = goal.targetDate.split('-').map(Number);
     const monthsUntilTarget = Math.max(
       1,
-      (targetDate.getFullYear() - today.getFullYear()) * 12 +
-        (targetDate.getMonth() - today.getMonth())
+      (targetYear - today.getFullYear()) * 12 +
+        (targetMonth - 1 - today.getMonth())
     );
 
     // Months required based on planned contribution
-    const monthsRequired = Math.ceil(remainingToSave / monthlyContribution);
+    const monthsRequired = remainingToSave === 0 ? 0 : monthlyContribution > 0
+      ? Math.ceil(remainingToSave / monthlyContribution)
+      : 0;
 
     // Projected completion date
     const projectedDate = new Date(today);
     projectedDate.setMonth(today.getMonth() + monthsRequired);
-    const projectedCompletionDate = projectedDate.toISOString().split('T')[0];
+    const dateOnly = `${projectedDate.getFullYear()}-${String(projectedDate.getMonth() + 1).padStart(2, '0')}-${String(projectedDate.getDate()).padStart(2, '0')}`;
+    const projectedCompletionDate = remainingToSave === 0
+      ? `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+      : monthlyContribution > 0 ? dateOnly : '';
 
     // Required monthly to meet the target date exactly
     const requiredMonthlyToMeetTarget = Math.ceil(remainingToSave / monthsUntilTarget);
-    const isOnTrack = monthsRequired <= monthsUntilTarget;
+    const isOnTrack = remainingToSave === 0 || (monthlyContribution > 0 && monthsRequired <= monthsUntilTarget);
     const monthlyShortfall = Math.max(0, requiredMonthlyToMeetTarget - monthlyContribution);
 
     return {
@@ -342,3 +355,4 @@ export function generateSmartBudgets(
     ];
   }
 }
+

@@ -14,15 +14,22 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
   const {
     currentView,
     profile,
+    currentUser,
+    isDemoMode,
+    logoutUser,
+    exitDemoMode,
     setCurrency,
     setMode,
     unreadNotificationsCount,
-    resetToDemoData,
     setCurrentView,
   } = useFinancial();
 
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
+  const handleModeChange = async () => {
+    try { await setMode(profile.mode === 'campus' ? 'pro' : 'campus'); }
+    catch { window.alert('Could not save the experience mode. Please try again.'); }
+  };
 
   const viewTitles: Record<string, { title: string; subtitle: string }> = {
     dashboard: {
@@ -77,14 +84,14 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
       <div className="flex items-center gap-3">
         <button
           onClick={onOpenMobileMenu}
-          className="lg:hidden p-2 text-text-secondary hover:text-text-primary rounded-xl hover:bg-white/5"
+          className="lg:hidden p-2 text-[#A7B0C8] hover:text-[#F1F3FA] rounded-xl hover:bg-white/5"
           aria-label="Open mobile navigation"
         >
           <Icon name="Menu" size={20} />
         </button>
 
         <div>
-          <h2 className="text-sm md:text-base font-bold text-text-primary leading-tight flex items-center gap-2">
+          <h2 className="text-sm md:text-base font-bold text-[#F1F3FA] leading-tight flex items-center gap-2">
             {currentMeta.title}
             <span
               className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
@@ -95,8 +102,13 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
             >
               {profile.mode === 'campus' ? 'Campus Mode' : 'Pro Mode'}
             </span>
+            {isDemoMode && (
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-semantic-warning/20 text-semantic-warning border border-semantic-warning/30">
+                Sample Demo
+              </span>
+            )}
           </h2>
-          <p className="text-xs text-text-muted hidden sm:block truncate max-w-md">
+          <p className="text-xs text-[#A7B0C8] hidden sm:block truncate max-w-md">
             {currentMeta.subtitle}
           </p>
         </div>
@@ -108,17 +120,18 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
         <div className="relative">
           <select
             value={profile.currency}
+            disabled={profile.onboardingCompleted}
             onChange={e => setCurrency(e.target.value as CurrencyCode)}
-            className="appearance-none bg-midnight-surface hover:bg-midnight-hover border border-white/10 rounded-xl px-2.5 py-1.5 pr-7 text-xs font-mono font-bold text-text-primary cursor-pointer focus:outline-none focus:border-turquoise transition-all"
-            title="Global Currency Selection"
+            className="appearance-none bg-[#151E38] hover:bg-[#1B2645] border border-white/10 rounded-xl px-2.5 py-1.5 pr-7 text-xs font-mono font-bold text-[#F1F3FA] cursor-pointer focus:outline-none focus:border-turquoise transition-all"
+            title="Account currency is fixed after onboarding; amounts are not converted"
           >
             {Object.keys(CURRENCIES).map(code => (
-              <option key={code} value={code} className="bg-midnight font-sans">
+              <option key={code} value={code} className="bg-[#10172E] font-sans">
                 {CURRENCIES[code as CurrencyCode].symbol} {code}
               </option>
             ))}
           </select>
-          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-text-muted">
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none text-[#A7B0C8]">
             <Icon name="ChevronDown" size={13} />
           </div>
         </div>
@@ -126,7 +139,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
         {/* Quick Add Button */}
         <button
           onClick={onOpenQuickAdd}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-turquoise hover:bg-turquoise-hover text-midnight text-xs font-bold transition-all shadow-glow-turquoise"
+          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-turquoise hover:bg-turquoise-hover text-[#10172E] text-xs font-bold transition-all shadow-glow-turquoise"
         >
           <Icon name="Plus" size={15} />
           <span>Add</span>
@@ -136,12 +149,12 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
         <div className="relative">
           <button
             onClick={() => setIsNotifOpen(!isNotifOpen)}
-            className="p-2 rounded-xl bg-midnight-surface hover:bg-midnight-hover border border-white/10 text-text-secondary hover:text-text-primary transition-colors relative"
+            className="p-2 rounded-xl bg-[#151E38] hover:bg-[#1B2645] border border-white/10 text-[#A7B0C8] hover:text-[#F1F3FA] transition-colors relative"
             title="Alerts and Insights"
           >
             <Icon name="Bell" size={17} />
             {unreadNotificationsCount > 0 && (
-              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-semantic-warning text-midnight font-bold text-[9px] flex items-center justify-center animate-pulse">
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-semantic-warning text-[#10172E] font-bold text-[9px] flex items-center justify-center animate-pulse">
                 {unreadNotificationsCount}
               </span>
             )}
@@ -149,7 +162,7 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
           <NotificationDropdown isOpen={isNotifOpen} onClose={() => setIsNotifOpen(false)} />
         </div>
 
-        {/* Profile Avatar & Demo Menu */}
+        {/* Profile Avatar & User Menu */}
         <div className="relative">
           <button
             onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
@@ -160,27 +173,32 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
               alt={profile.name}
               className="w-8 h-8 rounded-full border border-white/20 object-cover"
             />
-            <Icon name="ChevronDown" size={13} className="text-text-muted hidden md:block" />
+            <Icon name="ChevronDown" size={13} className="text-[#A7B0C8] hidden md:block" />
           </button>
 
           {/* User Menu Dropdown */}
           {isProfileMenuOpen && (
             <div
-              className="absolute right-0 top-12 w-56 rounded-2xl bg-[#151E38] border border-white/10 shadow-2xl py-2 z-50 text-xs animate-fadeIn"
+              className="absolute right-0 top-12 w-64 rounded-2xl bg-[#151E38] border border-white/10 shadow-2xl py-2 z-50 text-xs animate-fadeIn"
               onMouseLeave={() => setIsProfileMenuOpen(false)}
             >
               <div className="px-3 py-2 border-b border-white/5">
-                <p className="font-bold text-text-primary">{profile.name}</p>
-                <p className="text-[11px] text-text-muted truncate">{profile.collegeOrCompany}</p>
+                <p className="font-bold text-[#F1F3FA]">{profile.name}</p>
+                <p className="text-[11px] text-[#A7B0C8] truncate">
+                  {currentUser ? currentUser.email : isDemoMode ? 'Sample Demo Session' : ''}
+                </p>
+                {profile.collegeOrCompany && (
+                  <p className="text-[10px] text-turquoise truncate mt-0.5">{profile.collegeOrCompany}</p>
+                )}
               </div>
 
               <div className="py-1">
                 <button
                   onClick={() => {
-                    setMode(profile.mode === 'campus' ? 'pro' : 'campus');
+                    void handleModeChange();
                     setIsProfileMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-text-primary"
+                  className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-[#F1F3FA]"
                 >
                   <Icon name="Repeat" size={14} className="text-turquoise" />
                   Switch to {profile.mode === 'campus' ? 'Pro Mode' : 'Campus Mode'}
@@ -191,22 +209,37 @@ export const TopHeader: React.FC<TopHeaderProps> = ({ onOpenQuickAdd, onOpenMobi
                     setCurrentView('settings');
                     setIsProfileMenuOpen(false);
                   }}
-                  className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-text-primary"
+                  className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-[#F1F3FA]"
                 >
                   <Icon name="Settings" size={14} className="text-lavender" />
                   Settings & Transparency
                 </button>
 
-                <button
-                  onClick={() => {
-                    resetToDemoData(profile.mode);
-                    setIsProfileMenuOpen(false);
-                  }}
-                  className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-semantic-warning"
-                >
-                  <Icon name="RotateCcw" size={14} />
-                  Reset to {profile.mode === 'campus' ? 'Campus' : 'Pro'} Demo Data
-                </button>
+                {currentUser && (
+                  <button
+                    onClick={async () => {
+                      setIsProfileMenuOpen(false);
+                      await logoutUser();
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-semantic-error border-t border-white/5 mt-1"
+                  >
+                    <Icon name="LogOut" size={14} />
+                    Log Out of Pennywise
+                  </button>
+                )}
+
+                {isDemoMode && (
+                  <button
+                    onClick={() => {
+                      setIsProfileMenuOpen(false);
+                      exitDemoMode();
+                    }}
+                    className="w-full px-3 py-2 text-left hover:bg-white/5 flex items-center gap-2 text-turquoise border-t border-white/5 mt-1"
+                  >
+                    <Icon name="ArrowLeft" size={14} />
+                    Exit to Public Landing Page
+                  </button>
+                )}
               </div>
             </div>
           )}

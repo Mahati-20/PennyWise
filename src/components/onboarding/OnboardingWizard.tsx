@@ -24,7 +24,7 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
   const [mode, setFormMode] = useState<UserMode>(initialMode);
   const [name, setName] = useState(initialMode === 'campus' ? 'Aarav Sharma' : 'Elena Vance');
   const [collegeOrCompany, setCollegeOrCompany] = useState(
-    initialMode === 'campus' ? 'IIT Bombay' : 'Stripe Inc'
+    initialMode === 'campus' ? 'Western Lakes College' : 'Northstar Labs'
   );
   const [currency, setFormCurrency] = useState<CurrencyCode>(
     initialMode === 'campus' ? 'INR' : 'USD'
@@ -418,3 +418,4 @@ export const OnboardingWizard: React.FC<OnboardingWizardProps> = ({
     </div>
   );
 };
+

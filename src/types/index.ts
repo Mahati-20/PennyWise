@@ -6,7 +6,6 @@ export interface CurrencyInfo {
   code: CurrencyCode;
   symbol: string;
   name: string;
-  rateToUSD: number; // For clean aggregate conversions when requested
   locale: string;
 }
 
@@ -155,3 +154,4 @@ export interface PurchaseAnalysisResult {
   suggestedAlternative?: string;
   createdAt: string;
 }
+

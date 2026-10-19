@@ -16,6 +16,10 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
   onOpenAnalyzer,
 }) => {
   const { currentView, setCurrentView, profile, setMode } = useFinancial();
+  const handleModeChange = async (mode: 'campus' | 'pro') => {
+    try { await setMode(mode); }
+    catch { window.alert('Could not save the experience mode. Please try again.'); }
+  };
 
   const allNavItems: { id: AppView; label: string; icon: string; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -23,7 +27,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     { id: 'budgets', label: 'Budgets', icon: 'PieChart' },
     { id: 'goals', label: 'Savings Goals', icon: 'Target', badge: 'Studio' },
     { id: 'calendar', label: 'Financial Calendar', icon: 'CalendarDays' },
-    { id: 'coach', label: 'Money Coach', icon: 'Sparkles', badge: 'AI' },
+    { id: 'coach', label: 'Money Coach', icon: 'Sparkles' },
     { id: 'analyzer', label: 'Can I Afford This?', icon: 'ShieldAlert', badge: 'Signature' },
     { id: 'reports', label: 'Reports & Insights', icon: 'TrendingUp' },
     { id: 'settings', label: 'Settings', icon: 'Settings' },
@@ -71,7 +75,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
             <div className="p-3 border-b border-white/5">
               <div className="grid grid-cols-2 p-1 rounded-xl bg-midnight border border-white/5 text-xs font-semibold">
                 <button
-                  onClick={() => setMode('campus')}
+                  onClick={() => handleModeChange('campus')}
                   className={`py-1.5 rounded-lg flex items-center justify-center gap-1 ${
                     profile.mode === 'campus'
                       ? 'bg-turquoise text-midnight font-bold'
@@ -81,7 +85,7 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
                   🎓 Campus
                 </button>
                 <button
-                  onClick={() => setMode('pro')}
+                  onClick={() => handleModeChange('pro')}
                   className={`py-1.5 rounded-lg flex items-center justify-center gap-1 ${
                     profile.mode === 'pro' ? 'bg-lavender text-midnight font-bold' : 'text-text-muted'
                   }`}
@@ -177,3 +181,4 @@ export const MobileNavigation: React.FC<MobileNavigationProps> = ({
     </>
   );
 };
+

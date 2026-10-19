@@ -14,6 +14,8 @@ export const FinancialCalendarView: React.FC = () => {
     new Date().toISOString().split('T')[0]
   );
   const [isAddEventOpen, setIsAddEventOpen] = useState(false);
+  const [actionError, setActionError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // New Event Form State
   const [title, setTitle] = useState('');
@@ -41,26 +43,28 @@ export const FinancialCalendarView: React.FC = () => {
   const eventsOnSelectedDate = events.filter(e => e.date === selectedDateStr);
   const transactionsOnSelectedDate = transactions.filter(t => t.date === selectedDateStr);
 
-  const handleAddEvent = (e: React.FormEvent) => {
+  const handleAddEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) return;
 
-    addCalendarEvent({
-      title: title.trim() || 'Scheduled Payment',
-      amount: parsedAmount,
-      type,
-      date,
-      status: 'upcoming',
-    });
-
-    setIsAddEventOpen(false);
-    setTitle('');
-    setAmount('');
+    setSaving(true);
+    setActionError('');
+    try {
+      await addCalendarEvent({ title: title.trim() || 'Scheduled Payment', amount: parsedAmount, type, date, status: 'upcoming' });
+      setIsAddEventOpen(false);
+      setTitle('');
+      setAmount('');
+    } catch {
+      setActionError('Could not save this calendar item. Your entries are still here; please retry.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
+      {actionError && <p role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-semantic-error/40 bg-[#151E38] p-3 text-xs text-semantic-error shadow-xl">{actionError}</p>}
       {/* Top Banner */}
       <div className="p-6 rounded-3xl bg-midnight-surface/80 border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -259,7 +263,11 @@ export const FinancialCalendarView: React.FC = () => {
                           <span className="text-[10px] text-text-muted capitalize">
                             {e.type} •{' '}
                             <button
-                              onClick={() => toggleEventStatus(e.id)}
+                              onClick={async () => {
+                                setActionError('');
+                                try { await toggleEventStatus(e.id); }
+                                catch { setActionError('Could not update this calendar item. Please retry.'); }
+                              }}
                               className={`underline ${
                                 e.status === 'paid' ? 'text-semantic-success' : 'text-semantic-warning'
                               }`}
@@ -274,7 +282,11 @@ export const FinancialCalendarView: React.FC = () => {
                             {formatCurrency(e.amount, currency)}
                           </span>
                           <button
-                            onClick={() => deleteCalendarEvent(e.id)}
+                            onClick={async () => {
+                              setActionError('');
+                              try { await deleteCalendarEvent(e.id); }
+                              catch { setActionError('Could not delete this calendar item. Please retry.'); }
+                            }}
                             className="text-text-muted hover:text-semantic-error"
                           >
                             <Icon name="Trash2" size={13} />
@@ -397,6 +409,7 @@ export const FinancialCalendarView: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Schedule Event
@@ -409,3 +422,4 @@ export const FinancialCalendarView: React.FC = () => {
     </div>
   );
 };
+

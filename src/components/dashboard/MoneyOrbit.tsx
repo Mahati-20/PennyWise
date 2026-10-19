@@ -21,6 +21,7 @@ export const MoneyOrbit: React.FC = () => {
     budgetsProgress,
     goals,
     expenseThisMonth,
+    transactions,
     setCurrentView,
   } = useFinancial();
 
@@ -29,12 +30,17 @@ export const MoneyOrbit: React.FC = () => {
   const [reducedMotion, setReducedMotion] = useState(false);
   const [showA11yTable, setShowA11yTable] = useState(false);
 
-  // Currency
+  // Currency & Current Period
   const currency = profile.currency;
+  const currentPeriodName = new Date().toLocaleDateString(undefined, {
+    month: 'long',
+    year: 'numeric',
+  });
 
-  // Prepare spending arcs
-  const topBudgets = budgetsProgress.slice(0, 5);
+  // Prepare spending arcs from actual transactions
+  const topBudgets = budgetsProgress.filter(b => b.spent > 0).slice(0, 5);
   const totalBudgetSpent = topBudgets.reduce((sum, b) => sum + b.spent, 0) || 1;
+  const hasExpenses = expenseThisMonth > 0 && topBudgets.length > 0;
 
   // Concentric ring radii
   const size = 380;
@@ -47,10 +53,10 @@ export const MoneyOrbit: React.FC = () => {
   let currentAngle = -90; // Start at top
   const spendingArcs = topBudgets.map(b => {
     const fraction = b.spent / totalBudgetSpent;
-    const arcAngle = Math.max(12, fraction * 340); // Leave a small gap
+    const arcAngle = Math.max(12, fraction * 340);
     const start = currentAngle;
     const end = currentAngle + arcAngle;
-    currentAngle = end + 4; // 4 deg gap
+    currentAngle = end + 4;
 
     return {
       category: b.category,
@@ -62,7 +68,6 @@ export const MoneyOrbit: React.FC = () => {
     };
   });
 
-  // Convert polar coordinates to SVG path
   const polarToCartesian = (centerX: number, centerY: number, radius: number, angleInDegrees: number) => {
     const angleInRadians = ((angleInDegrees - 90) * Math.PI) / 180.0;
     return {
@@ -84,24 +89,33 @@ export const MoneyOrbit: React.FC = () => {
   const centerLabel =
     activeCenterMetric === 'available' ? 'Available to Spend' : 'Total Net Balance';
 
+  // Plain-language takeaway
+  const highestSpendCategory = topBudgets.sort((a, b) => b.spent - a.spent)[0];
+  const takeawayMessage = hasExpenses && highestSpendCategory
+    ? `💡 ${highestSpendCategory.category} is your largest expense this period (${formatCurrency(highestSpendCategory.spent, currency)} • ${Math.round((highestSpendCategory.spent / expenseThisMonth) * 100)}% of tracked spending).`
+    : `💡 No expenses recorded for ${currentPeriodName} yet. Add a transaction to see your spending breakdown here.`;
+
   return (
     <div className="relative rounded-2xl bg-midnight-elevated/70 border border-white/10 p-5 md:p-6 backdrop-blur-md overflow-hidden">
       {/* Background ambient lighting */}
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-72 rounded-full bg-turquoise-glow blur-[100px] pointer-events-none opacity-40" />
       <div className="absolute top-1/3 left-1/3 -translate-x-1/2 -translate-y-1/2 w-64 h-64 rounded-full bg-lavender-glow blur-[90px] pointer-events-none opacity-30" />
 
-      {/* Header with controls */}
+      {/* Header with Title, Period, and Accessible Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-3 z-10 relative">
         <div className="flex items-center gap-2">
           <div className="p-1.5 rounded-lg bg-turquoise/10 border border-turquoise/30 text-turquoise">
             <Icon name="Compass" size={18} />
           </div>
           <div>
-            <h3 className="text-base font-semibold text-text-primary tracking-tight">
-              Interactive Money Orbit
+            <h3 className="text-base font-semibold text-text-primary tracking-tight flex items-center gap-2">
+              <span>Interactive Money Orbit</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/10 text-[#A7B0C8]">
+                {currentPeriodName}
+              </span>
             </h3>
             <p className="text-xs text-text-muted">
-              Visual map of liquid funds, category spend & active goals
+              Live orbital map of liquid funds, recorded category expenses & active goals
             </p>
           </div>
         </div>
@@ -136,6 +150,8 @@ export const MoneyOrbit: React.FC = () => {
           <button
             onClick={() => setShowA11yTable(!showA11yTable)}
             title="Toggle accessible data table"
+            aria-label={showA11yTable ? 'Hide Money Orbit data table' : 'Show Money Orbit data table'}
+            aria-expanded={showA11yTable}
             className="p-1.5 rounded-lg bg-midnight-surface hover:bg-midnight-hover text-text-secondary hover:text-text-primary border border-white/5 transition-colors"
           >
             <Icon name="Table" size={15} />
@@ -146,8 +162,8 @@ export const MoneyOrbit: React.FC = () => {
       {/* Accessible Table Fallback */}
       {showA11yTable ? (
         <div className="my-4 p-4 rounded-xl bg-midnight-surface/90 border border-white/10 text-xs text-text-secondary">
-          <h4 className="font-semibold text-text-primary mb-2">Money Orbit Data Table</h4>
-          <div className="space-y-1.5">
+          <h4 className="font-semibold text-text-primary mb-2">Money Orbit Data Table — {currentPeriodName}</h4>
+            <div className="space-y-1.5">
             <div className="flex justify-between py-1 border-b border-white/5">
               <span>{centerLabel}</span>
               <span className="font-semibold text-turquoise">
@@ -155,17 +171,28 @@ export const MoneyOrbit: React.FC = () => {
               </span>
             </div>
             <div className="flex justify-between py-1 border-b border-white/5">
-              <span>This Month Expenses</span>
+              <span>Total Recorded Expenses</span>
               <span className="font-semibold text-semantic-warning">
                 {formatCurrency(expenseThisMonth, currency)}
               </span>
             </div>
-            {topBudgets.map(b => (
-              <div key={b.id} className="flex justify-between py-1">
-                <span>{b.category}</span>
+            {topBudgets.length > 0 ? (
+              topBudgets.map(b => (
+                <div key={b.id} className="flex justify-between py-1 border-b border-white/5">
+                  <span>{b.category}</span>
+                  <span>
+                    {formatCurrency(b.spent, currency)} / {formatCurrency(b.limit, currency)} ({b.percentage}%)
+                  </span>
+                </div>
+              ))
+            ) : (
+              <div className="py-2 text-text-muted italic">No category expenses recorded yet.</div>
+            )}
+            {goals.map(g => (
+              <div key={g.id} className="flex justify-between py-1">
+                <span>Goal: {g.name}</span>
                 <span>
-                  {formatCurrency(b.spent, currency)} / {formatCurrency(b.limit, currency)} (
-                  {b.percentage}%)
+                  {formatCurrency(g.currentAmount, currency)} / {formatCurrency(g.targetAmount, currency)}
                 </span>
               </div>
             ))}
@@ -183,20 +210,15 @@ export const MoneyOrbit: React.FC = () => {
           <svg
             viewBox={`0 0 ${size} ${size}`}
             className="w-full max-w-[340px] md:max-w-[380px] h-auto drop-shadow-2xl select-none"
-            aria-label="Money Orbit financial visualization"
+            aria-label={`Money Orbit financial visualization for ${currentPeriodName}`}
+            role="group"
           >
             <defs>
-              {/* Radial gradient for central glow */}
               <radialGradient id="centerGlow" cx="50%" cy="50%" r="50%">
                 <stop offset="0%" stopColor="#40D9D0" stopOpacity="0.25" />
                 <stop offset="70%" stopColor="#1B2645" stopOpacity="0.8" />
                 <stop offset="100%" stopColor="#151E38" stopOpacity="0.95" />
               </radialGradient>
-              <linearGradient id="orbitRingGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#40D9D0" stopOpacity="0.6" />
-                <stop offset="50%" stopColor="#B9A7FF" stopOpacity="0.4" />
-                <stop offset="100%" stopColor="#40D9D0" stopOpacity="0.2" />
-              </linearGradient>
             </defs>
 
             {/* Background orbital guide tracks */}
@@ -229,67 +251,88 @@ export const MoneyOrbit: React.FC = () => {
               style={{ animationDuration: '45s' }}
             />
 
-            {/* Ring 1: Inner Spending Arcs */}
-            {spendingArcs.map((arc, i) => {
-              const pathD = describeArc(center, center, innerRadius, arc.startAngle, arc.endAngle);
-              const isHovered = hoveredSegment?.category === arc.category;
+            {/* Ring 1: Inner Spending Arcs (or placeholder track if 0 expenses) */}
+            {hasExpenses ? (
+              spendingArcs.map((arc, i) => {
+                const pathD = describeArc(center, center, innerRadius, arc.startAngle, arc.endAngle);
+                const isHovered = hoveredSegment?.category === arc.category;
 
-              return (
-                <path
-                  key={i}
-                  d={pathD}
-                  fill="none"
-                  stroke={arc.color}
-                  strokeWidth={isHovered ? 8 : 5}
-                  strokeLinecap="round"
-                  className="transition-all duration-200 cursor-pointer hover:opacity-100"
-                  style={{
-                    opacity: hoveredSegment && !isHovered ? 0.35 : 0.85,
-                    filter: isHovered ? `drop-shadow(0 0 6px ${arc.color})` : 'none',
-                  }}
-                  onMouseEnter={() =>
-                    setHoveredSegment({
-                      title: arc.category,
-                      category: arc.category,
-                      amount: arc.amount,
-                      percentage: arc.percentage,
-                      color: arc.color,
-                      description: `${arc.percentage}% of month's tracked spending`,
-                      type: 'spending',
-                    })
-                  }
-                  onMouseLeave={() => setHoveredSegment(null)}
-                  onClick={() => setCurrentView('budgets')}
-                />
-              );
-            })}
+                return (
+                  <path
+                    key={i}
+                    d={pathD}
+                    fill="none"
+                    stroke={arc.color}
+                    strokeWidth={isHovered ? 8 : 5}
+                    strokeLinecap="round"
+                    className="transition-all duration-200 cursor-pointer hover:opacity-100"
+                    style={{
+                      opacity: hoveredSegment && !isHovered ? 0.35 : 0.85,
+                      filter: isHovered ? `drop-shadow(0 0 6px ${arc.color})` : 'none',
+                    }}
+                    onMouseEnter={() =>
+                      setHoveredSegment({
+                        title: arc.category,
+                        category: arc.category,
+                        amount: arc.amount,
+                        percentage: arc.percentage,
+                        color: arc.color,
+                        description: `${arc.percentage}% of month's tracked spending`,
+                        type: 'spending',
+                      })
+                    }
+                    onMouseLeave={() => setHoveredSegment(null)}
+                    onTouchStart={() => setHoveredSegment({ title: arc.category, category: arc.category, amount: arc.amount, percentage: arc.percentage, color: arc.color, description: `${arc.percentage}% of month's tracked spending`, type: 'spending' })}
+                    onFocus={() => setHoveredSegment({ title: arc.category, category: arc.category, amount: arc.amount, percentage: arc.percentage, color: arc.color, description: `${arc.percentage}% of month's tracked spending`, type: 'spending' })}
+                    onBlur={() => setHoveredSegment(null)}
+                    onClick={() => setCurrentView('budgets')}
+                    onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setCurrentView('budgets'); } }}
+                  />
+                );
+              })
+            ) : (
+              <circle
+                cx={center}
+                cy={center}
+                r={innerRadius}
+                fill="none"
+                stroke="rgba(64, 217, 208, 0.2)"
+                strokeWidth="3"
+                strokeDasharray="6 6"
+              />
+            )}
 
             {/* Ring 2: Mid Budget Progress Arc */}
-            <path
-              d={describeArc(center, center, midRadius, -90, 160)}
-              fill="none"
-              stroke="#B9A7FF"
-              strokeWidth="3.5"
-              strokeDasharray="3 3"
-              strokeLinecap="round"
-              className="cursor-pointer transition-all hover:stroke-lavender-light"
-              onMouseEnter={() =>
-                setHoveredSegment({
-                  title: 'Monthly Budget Health',
-                  amount: expenseThisMonth,
-                  color: '#B9A7FF',
-                  description: 'Tracked against monthly category allocations',
-                  type: 'budget',
-                })
-              }
-              onMouseLeave={() => setHoveredSegment(null)}
-              onClick={() => setCurrentView('budgets')}
-            />
+            {expenseThisMonth > 0 && (
+              <path
+                d={describeArc(center, center, midRadius, -90, 160)}
+                fill="none"
+                stroke="#B9A7FF"
+                strokeWidth="3.5"
+                strokeDasharray="3 3"
+                strokeLinecap="round"
+                className="cursor-pointer transition-all hover:stroke-lavender-light"
+                onMouseEnter={() =>
+                  setHoveredSegment({
+                    title: 'Monthly Budget Health',
+                    amount: expenseThisMonth,
+                    color: '#B9A7FF',
+                    description: `Total expenses recorded this cycle: ${formatCurrency(expenseThisMonth, currency)}`,
+                    type: 'budget',
+                  })
+                }
+                onMouseLeave={() => setHoveredSegment(null)}
+                onTouchStart={() => setHoveredSegment({ title: 'Monthly Budget Health', amount: expenseThisMonth, color: '#B9A7FF', description: `Total expenses recorded this cycle: ${formatCurrency(expenseThisMonth, currency)}`, type: 'budget' })}
+                onFocus={() => setHoveredSegment({ title: 'Monthly Budget Health', amount: expenseThisMonth, color: '#B9A7FF', description: `Total expenses recorded this cycle: ${formatCurrency(expenseThisMonth, currency)}`, type: 'budget' })}
+                onBlur={() => setHoveredSegment(null)}
+                onClick={() => setCurrentView('budgets')}
+                onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setCurrentView('budgets'); } }}
+              />
+            )}
 
             {/* Ring 3: Orbital Goal Satellites */}
-            {goals.slice(0, 3).map((goal, index) => {
-              // Position satellites around outer orbit
-              const angle = (index * 115 + 35) * (Math.PI / 180);
+            {goals.slice(0, 4).map((goal, index) => {
+              const angle = (index * 95 + 30) * (Math.PI / 180);
               const x = center + outerRadius * Math.cos(angle);
               const y = center + outerRadius * Math.sin(angle);
               const pct = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
@@ -310,9 +353,12 @@ export const MoneyOrbit: React.FC = () => {
                     })
                   }
                   onMouseLeave={() => setHoveredSegment(null)}
+                  onTouchStart={() => setHoveredSegment({ title: goal.name, amount: goal.currentAmount, percentage: pct, color: '#5ED6A2', description: `Target: ${formatCurrency(goal.targetAmount, currency)} (${pct}% funded)`, type: 'goal' })}
+                  onFocus={() => setHoveredSegment({ title: goal.name, amount: goal.currentAmount, percentage: pct, color: '#5ED6A2', description: `Target: ${formatCurrency(goal.targetAmount, currency)} (${pct}% funded)`, type: 'goal' })}
+                  onBlur={() => setHoveredSegment(null)}
                   onClick={() => setCurrentView('goals')}
+                  onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setCurrentView('goals'); } }}
                 >
-                  {/* Glowing halo */}
                   <circle
                     cx={x}
                     cy={y}
@@ -322,7 +368,6 @@ export const MoneyOrbit: React.FC = () => {
                     strokeWidth="1.5"
                     className="transition-all"
                   />
-                  {/* Goal core dot */}
                   <circle cx={x} cy={y} r={isHovered ? 7 : 5} fill="#5ED6A2" />
                 </g>
               );
@@ -368,11 +413,11 @@ export const MoneyOrbit: React.FC = () => {
                 setActiveCenterMetric(prev => (prev === 'available' ? 'balance' : 'available'))
               }
             >
-              Tap to switch
+              Click to toggle metric
             </text>
           </svg>
 
-          {/* Interactive Info Card below Orbit */}
+          {/* Dynamic Inspector Detail Card */}
           <div className="w-full mt-2 min-h-[58px] p-2.5 rounded-xl bg-midnight-surface/80 border border-white/5 flex items-center justify-between text-xs transition-all">
             {hoveredSegment ? (
               <>
@@ -405,7 +450,7 @@ export const MoneyOrbit: React.FC = () => {
               <div className="flex items-center justify-between w-full text-text-muted px-1">
                 <span className="flex items-center gap-1.5">
                   <Icon name="MousePointerClick" size={14} className="text-turquoise" />
-                  Hover arcs & satellites to inspect spending & goals
+                  Focus or select an arc or goal to view its details
                 </span>
                 <span className="text-[11px] text-text-secondary hidden sm:inline">
                   {goals.length} Goals Active
@@ -416,19 +461,24 @@ export const MoneyOrbit: React.FC = () => {
         </div>
       )}
 
-      {/* Orbit legend tags */}
+      {/* Orbit Plain-Language Takeaway Banner */}
+      <div className="mt-2 p-2.5 rounded-xl bg-midnight/60 border border-white/5 text-xs text-text-secondary">
+        {takeawayMessage}
+      </div>
+
+      {/* Self-Explanatory Visual Legend */}
       <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t border-white/5 text-[11px] text-text-secondary text-center">
         <div className="flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-turquoise" />
-          <span>Category Arcs</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-turquoise" />
+          <span>Inner: Expenses Arc</span>
         </div>
         <div className="flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-lavender" />
-          <span>Budget Utilization</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-lavender" />
+          <span>Mid: Budget Track</span>
         </div>
         <div className="flex items-center justify-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-semantic-success" />
-          <span>Goal Satellites</span>
+          <span className="w-2.5 h-2.5 rounded-full bg-semantic-success" />
+          <span>Outer: Goal Satellites</span>
         </div>
       </div>
     </div>

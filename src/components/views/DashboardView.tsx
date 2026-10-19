@@ -304,49 +304,69 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             {/* Budget Progress Bars */}
-            <div className="space-y-3.5">
-              {budgetsProgress.slice(0, 4).map(b => (
-                <div key={b.id} className="text-xs space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-text-primary">{b.category}</span>
-                    <span className="font-mono text-text-secondary">
-                      {formatCurrency(b.spent, currency)} / {formatCurrency(b.limit, currency)}
-                    </span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-midnight overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-300 ${
-                        b.status === 'over'
-                          ? 'bg-semantic-error'
-                          : b.status === 'warning'
-                          ? 'bg-semantic-warning'
-                          : 'bg-turquoise'
-                      }`}
-                      style={{ width: `${Math.min(100, b.percentage)}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-text-muted">
-                    <span>
-                      {b.status === 'over'
-                        ? 'Over limit!'
-                        : `${formatCurrency(b.remaining, currency)} remaining`}
-                    </span>
-                    <span className="font-mono">{b.percentage}%</span>
-                  </div>
+            {budgetsProgress.length === 0 ? (
+              <div className="py-6 px-4 rounded-xl bg-midnight/60 border border-white/5 text-center my-auto">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-lavender/10 text-lavender flex items-center justify-center">
+                  <Icon name="PieChart" size={18} />
                 </div>
-              ))}
-            </div>
+                <p className="text-xs font-semibold text-text-primary">No budget categories yet</p>
+                <p className="text-[11px] text-text-muted mt-1 max-w-xs mx-auto">
+                  Set monthly caps to track category spending velocity and get alerts before overspending.
+                </p>
+                <button
+                  onClick={() => setCurrentView('budgets')}
+                  className="mt-3 px-3 py-1.5 rounded-lg bg-midnight-elevated hover:bg-midnight border border-turquoise/30 text-xs font-semibold text-turquoise transition-colors"
+                >
+                  Create First Budget
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3.5">
+                {budgetsProgress.slice(0, 4).map(b => (
+                  <div key={b.id} className="text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-text-primary">{b.category}</span>
+                      <span className="font-mono text-text-secondary">
+                        {formatCurrency(b.spent, currency)} / {formatCurrency(b.limit, currency)}
+                      </span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-midnight overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all duration-300 ${
+                          b.status === 'over'
+                            ? 'bg-semantic-error'
+                            : b.status === 'warning'
+                            ? 'bg-semantic-warning'
+                            : 'bg-turquoise'
+                        }`}
+                        style={{ width: `${Math.min(100, b.percentage)}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-[10px] text-text-muted">
+                      <span>
+                        {b.status === 'over'
+                          ? 'Over limit!'
+                          : `${formatCurrency(b.remaining, currency)} remaining`}
+                      </span>
+                      <span className="font-mono">{b.percentage}%</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="mt-5 pt-4 border-t border-white/5 flex items-center justify-between">
             <span className="text-xs text-text-muted">
-              {budgetsProgress.filter(b => b.status === 'over').length} categories over limit
+              {budgetsProgress.length === 0
+                ? '0 active budgets'
+                : `${budgetsProgress.filter(b => b.status === 'over').length} categories over limit`}
             </span>
             <button
               onClick={() => setCurrentView('budgets')}
               className="px-3 py-1.5 rounded-lg bg-midnight border border-white/10 text-xs font-medium text-text-primary hover:border-turquoise/30"
             >
-              Adjust Allocations
+              {budgetsProgress.length === 0 ? 'Setup Budgets' : 'Adjust Allocations'}
             </button>
           </div>
         </div>
@@ -355,106 +375,140 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* 4. GOALS PROGRESS & UPCOMING BILLS */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: Savings Goals Studio Snapshot (6 cols) */}
-        <div className="lg:col-span-6 rounded-2xl bg-midnight-surface/80 border border-white/10 p-5 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-semantic-success/15 text-semantic-success">
-                <Icon name="Target" size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-text-primary">Savings Goals</h3>
-                <p className="text-[11px] text-text-muted">Active targets & milestones</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setCurrentView('goals')}
-              className="text-xs text-turquoise hover:underline font-semibold"
-            >
-              Open Studio →
-            </button>
-          </div>
-
-          <div className="space-y-3">
-            {goals.slice(0, 3).map(g => {
-              const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
-              return (
-                <div
-                  key={g.id}
-                  onClick={() => setCurrentView('goals')}
-                  className="p-3 rounded-xl bg-midnight border border-white/5 hover:border-white/20 cursor-pointer transition-all space-y-1.5"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-semibold text-text-primary">{g.name}</span>
-                    <span className="text-xs font-mono font-bold text-semantic-success">
-                      {pct}%
-                    </span>
-                  </div>
-                  <div className="w-full h-1.5 bg-midnight-elevated rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-turquoise to-[#5ED6A2] rounded-full"
-                      style={{ width: `${pct}%` }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[11px] text-text-muted font-mono">
-                    <span>{formatCurrency(g.currentAmount, currency)}</span>
-                    <span>Target: {formatCurrency(g.targetAmount, currency)}</span>
-                  </div>
+        <div className="lg:col-span-6 rounded-2xl bg-midnight-surface/80 border border-white/10 p-5 md:p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-semantic-success/15 text-semantic-success">
+                  <Icon name="Target" size={17} />
                 </div>
-              );
-            })}
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Savings Goals</h3>
+                  <p className="text-[11px] text-text-muted">Active targets & milestones</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCurrentView('goals')}
+                className="text-xs text-turquoise hover:underline font-semibold"
+              >
+                Open Studio →
+              </button>
+            </div>
+
+            {goals.length === 0 ? (
+              <div className="py-6 px-4 rounded-xl bg-midnight/60 border border-white/5 text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-semantic-success/10 text-semantic-success flex items-center justify-center">
+                  <Icon name="Target" size={18} />
+                </div>
+                <p className="text-xs font-semibold text-text-primary">No savings goals yet</p>
+                <p className="text-[11px] text-text-muted mt-1 max-w-xs mx-auto">
+                  Define a target like an emergency cushion, gadget, or trip to automate monthly progress.
+                </p>
+                <button
+                  onClick={() => setCurrentView('goals')}
+                  className="mt-3 px-3 py-1.5 rounded-lg bg-midnight-elevated hover:bg-midnight border border-semantic-success/30 text-xs font-semibold text-semantic-success transition-colors"
+                >
+                  Set a Savings Goal
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {goals.slice(0, 3).map(g => {
+                  const pct = Math.min(100, Math.round((g.currentAmount / g.targetAmount) * 100));
+                  return (
+                    <div
+                      key={g.id}
+                      onClick={() => setCurrentView('goals')}
+                      className="p-3 rounded-xl bg-midnight border border-white/5 hover:border-white/20 cursor-pointer transition-all space-y-1.5"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-text-primary">{g.name}</span>
+                        <span className="text-xs font-mono font-bold text-semantic-success">
+                          {pct}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-midnight-elevated rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-turquoise to-[#5ED6A2] rounded-full"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[11px] text-text-muted font-mono">
+                        <span>{formatCurrency(g.currentAmount, currency)}</span>
+                        <span>Target: {formatCurrency(g.targetAmount, currency)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
 
         {/* Right: Upcoming Commitments & Bills (6 cols) */}
-        <div className="lg:col-span-6 rounded-2xl bg-midnight-surface/80 border border-white/10 p-5 md:p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 rounded-lg bg-semantic-warning/15 text-semantic-warning">
-                <Icon name="CalendarClock" size={17} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-text-primary">Upcoming Commitments</h3>
-                <p className="text-[11px] text-text-muted">Scheduled bills & subscriptions</p>
-              </div>
-            </div>
-            <button
-              onClick={() => setCurrentView('calendar')}
-              className="text-xs text-turquoise hover:underline font-semibold"
-            >
-              Calendar →
-            </button>
-          </div>
-
-          {upcomingBills.length === 0 ? (
-            <div className="p-6 text-center text-xs text-text-muted">
-              No bills due in the next 14 days.
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {upcomingBills.map(b => (
-                <div
-                  key={b.id}
-                  className="p-3 rounded-xl bg-midnight border border-white/5 flex items-center justify-between text-xs"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 rounded-lg bg-white/5 text-semantic-warning">
-                      <Icon name="AlertCircle" size={14} />
-                    </div>
-                    <div>
-                      <span className="font-semibold text-text-primary block">{b.title}</span>
-                      <span className="text-[11px] text-text-muted">Due on {b.date}</span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="font-mono font-bold text-text-primary block">
-                      {formatCurrency(b.amount, currency)}
-                    </span>
-                    <span className="text-[10px] text-turquoise">Reserved in funds</span>
-                  </div>
+        <div className="lg:col-span-6 rounded-2xl bg-midnight-surface/80 border border-white/10 p-5 md:p-6 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-semantic-warning/15 text-semantic-warning">
+                  <Icon name="CalendarClock" size={17} />
                 </div>
-              ))}
+                <div>
+                  <h3 className="text-sm font-bold text-text-primary">Upcoming Commitments</h3>
+                  <p className="text-[11px] text-text-muted">Scheduled bills & subscriptions</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCurrentView('calendar')}
+                className="text-xs text-turquoise hover:underline font-semibold"
+              >
+                Calendar →
+              </button>
             </div>
-          )}
+
+            {upcomingBills.length === 0 ? (
+              <div className="py-6 px-4 rounded-xl bg-midnight/60 border border-white/5 text-center">
+                <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-semantic-warning/10 text-semantic-warning flex items-center justify-center">
+                  <Icon name="CalendarClock" size={18} />
+                </div>
+                <p className="text-xs font-semibold text-text-primary">No bills due in the next 14 days</p>
+                <p className="text-[11px] text-text-muted mt-1 max-w-xs mx-auto">
+                  Schedule rent, subscriptions, or utility dates in your calendar so Available-to-Spend reserves them automatically.
+                </p>
+                <button
+                  onClick={() => setCurrentView('calendar')}
+                  className="mt-3 px-3 py-1.5 rounded-lg bg-midnight-elevated hover:bg-midnight border border-white/10 text-xs font-semibold text-text-secondary hover:text-text-primary transition-colors"
+                >
+                  Manage Calendar
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {upcomingBills.map(b => (
+                  <div
+                    key={b.id}
+                    className="p-3 rounded-xl bg-midnight border border-white/5 flex items-center justify-between text-xs"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-1.5 rounded-lg bg-white/5 text-semantic-warning">
+                        <Icon name="AlertCircle" size={14} />
+                      </div>
+                      <div>
+                        <span className="font-semibold text-text-primary block">{b.title}</span>
+                        <span className="text-[11px] text-text-muted">Due on {b.date}</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="font-mono font-bold text-text-primary block">
+                        {formatCurrency(b.amount, currency)}
+                      </span>
+                      <span className="text-[10px] text-turquoise">Reserved in funds</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -478,44 +532,73 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </button>
         </div>
 
-        <div className="divide-y divide-white/5">
-          {recentTransactions.map(t => {
-            const isIncome = t.type === 'income';
-            return (
-              <div key={t.id} className="py-3 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`p-2 rounded-xl ${
-                      isIncome
-                        ? 'bg-semantic-success/15 text-semantic-success'
-                        : 'bg-semantic-warning/15 text-semantic-warning'
-                    }`}
-                  >
-                    <Icon name={isIncome ? 'ArrowDownLeft' : 'ArrowUpRight'} size={15} />
+        {recentTransactions.length === 0 ? (
+          <div className="py-8 px-4 rounded-xl bg-midnight/40 border border-white/5 text-center">
+            <div className="w-12 h-12 mx-auto mb-2.5 rounded-full bg-turquoise/10 text-turquoise flex items-center justify-center">
+              <Icon name="Receipt" size={20} />
+            </div>
+            <h4 className="text-xs font-bold text-text-primary">No transactions recorded yet</h4>
+            <p className="text-[11px] text-text-muted mt-1 max-w-sm mx-auto">
+              Add your first expense or income to see live cash flow, calculate available-to-spend, and activate your Money Orbit rings.
+            </p>
+            <div className="mt-4 flex flex-wrap justify-center gap-2.5">
+              <button
+                onClick={() => onOpenQuickAdd('expense')}
+                className="px-3.5 py-1.5 rounded-xl bg-midnight-surface hover:bg-midnight border border-white/10 hover:border-semantic-warning/40 text-xs font-semibold text-text-primary flex items-center gap-1.5 transition-all"
+              >
+                <div className="w-2 h-2 rounded-full bg-semantic-warning" />
+                Add First Expense
+              </button>
+              <button
+                onClick={() => onOpenQuickAdd('income')}
+                className="px-3.5 py-1.5 rounded-xl bg-midnight-surface hover:bg-midnight border border-white/10 hover:border-semantic-success/40 text-xs font-semibold text-text-primary flex items-center gap-1.5 transition-all"
+              >
+                <div className="w-2 h-2 rounded-full bg-semantic-success" />
+                Add Income
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="divide-y divide-white/5">
+            {recentTransactions.map(t => {
+              const isIncome = t.type === 'income';
+              return (
+                <div key={t.id} className="py-3 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-3">
+                    <div
+                      className={`p-2 rounded-xl ${
+                        isIncome
+                          ? 'bg-semantic-success/15 text-semantic-success'
+                          : 'bg-semantic-warning/15 text-semantic-warning'
+                      }`}
+                    >
+                      <Icon name={isIncome ? 'ArrowDownLeft' : 'ArrowUpRight'} size={15} />
+                    </div>
+                    <div>
+                      <span className="font-semibold text-text-primary block">{t.description}</span>
+                      <span className="text-[11px] text-text-muted">
+                        {t.category} • {t.date} • {t.paymentMethod}
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="font-semibold text-text-primary block">{t.description}</span>
-                    <span className="text-[11px] text-text-muted">
-                      {t.category} • {t.date} • {t.paymentMethod}
+
+                  <div className="text-right">
+                    <span
+                      className={`font-mono font-bold ${
+                        isIncome ? 'text-semantic-success' : 'text-text-primary'
+                      }`}
+                    >
+                      {isIncome ? '+' : '-'}
+                      {formatCurrency(t.amount, currency)}
                     </span>
                   </div>
                 </div>
-
-                <div className="text-right">
-                  <span
-                    className={`font-mono font-bold ${
-                      isIncome ? 'text-semantic-success' : 'text-text-primary'
-                    }`}
-                  >
-                    {isIncome ? '+' : '-'}
-                    {formatCurrency(t.amount, currency)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 };
+

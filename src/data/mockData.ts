@@ -5,7 +5,7 @@ export const CAMPUS_SAMPLE_PROFILE: UserProfile = {
   mode: 'campus',
   currency: 'INR',
   avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-  collegeOrCompany: 'IIT Bombay • Computer Science',
+  collegeOrCompany: 'Western Lakes College • Computer Science (fictional)',
   startingBalance: 12450,
   monthlyIncomeOrAllowance: 16000,
   incomeSource: 'Monthly Family Allowance & TA Stipend',
@@ -19,7 +19,7 @@ export const PRO_SAMPLE_PROFILE: UserProfile = {
   mode: 'pro',
   currency: 'USD',
   avatar: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?w=150&auto=format&fit=crop&q=80',
-  collegeOrCompany: 'Stripe • Senior Product Designer',
+  collegeOrCompany: 'Northstar Labs • Product Designer (fictional)',
   startingBalance: 18450,
   monthlyIncomeOrAllowance: 7200,
   incomeSource: 'Primary Salary & Consulting Retainer',
@@ -437,3 +437,4 @@ export const PRO_SAMPLE_INSIGHTS: CoachInsight[] = [
     timestamp: '2 days ago',
   },
 ];
+

@@ -68,7 +68,7 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
         {/* Tagline Badge */}
         <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-midnight-elevated border border-turquoise/30 text-turquoise text-xs font-semibold mb-6 shadow-sm">
           <span className="w-2 h-2 rounded-full bg-turquoise animate-pulse" />
-          The Intelligent Personal Finance Companion
+          A clearer view of your everyday finances
         </div>
 
         {/* Memorable Headline */}
@@ -196,9 +196,9 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
       <footer className="max-w-5xl w-full mx-auto text-center py-4 text-xs text-text-muted border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-2 z-10">
         <span>Pennywise • Premium Fintech Web Companion</span>
         <span className="flex items-center gap-4">
-          <span className="text-turquoise">100% Client-Side Privacy</span>
+          <span className="text-turquoise">Money Orbit visualizations</span>
           <span>•</span>
-          <span>No Paid API Dependencies</span>
+          <span>Campus and Pro experiences</span>
           <span>•</span>
           <span className="text-lavender">Multi-Currency (INR, USD, EUR, GBP)</span>
         </span>
@@ -206,3 +206,4 @@ export const WelcomeScreen: React.FC<WelcomeScreenProps> = ({
     </div>
   );
 };
+

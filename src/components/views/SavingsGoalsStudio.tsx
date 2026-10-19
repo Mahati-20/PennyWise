@@ -24,6 +24,8 @@ export const SavingsGoalsStudio: React.FC = () => {
   const [depositGoalId, setDepositGoalId] = useState<string | null>(null);
   const [depositAmount, setDepositAmount] = useState('');
   const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [saving, setSaving] = useState(false);
 
   // Interactive Allocation Simulator state
   const [simulatedAllocations, setSimulatedAllocations] = useState<Record<string, number>>(() => {
@@ -54,18 +56,35 @@ export const SavingsGoalsStudio: React.FC = () => {
     setHasUnsavedSimulation(true);
   };
 
-  const handleSaveAllocations = () => {
-    updateGoalAllocations(simulatedAllocations);
-    setHasUnsavedSimulation(false);
+  const handleSaveAllocations = async () => {
+    setSaving(true);
+    setActionError('');
+    try {
+      await updateGoalAllocations(simulatedAllocations);
+      setHasUnsavedSimulation(false);
+    } catch {
+      setActionError('Could not save goal allocations. Your simulation is still here; please retry.');
+    } finally {
+      setSaving(false);
+    }
   };
 
-  const handleDepositSubmit = (e: React.FormEvent) => {
+  const handleDepositSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!depositGoalId) return;
     const amount = parseFloat(depositAmount);
     if (isNaN(amount) || amount <= 0) return;
 
-    logGoalContribution(depositGoalId, amount);
+    setSaving(true);
+    setActionError('');
+    try {
+      await logGoalContribution(depositGoalId, amount);
+    } catch {
+      setActionError('Could not record this deposit. The amount is still here; please retry.');
+      setSaving(false);
+      return;
+    }
+    setSaving(false);
 
     // Trigger celebration confetti
     try {
@@ -83,14 +102,17 @@ export const SavingsGoalsStudio: React.FC = () => {
     setDepositAmount('');
   };
 
-  const handleCreateGoal = (e: React.FormEvent) => {
+  const handleCreateGoal = async (e: React.FormEvent) => {
     e.preventDefault();
     const targetNum = parseFloat(targetAmount);
     const contNum = parseFloat(plannedContribution) || 0;
     const savedNum = parseFloat(initialSaved) || 0;
     if (isNaN(targetNum) || targetNum <= 0) return;
 
-    addGoal({
+    setSaving(true);
+    setActionError('');
+    try {
+      await addGoal({
       name: name.trim() || 'New Savings Target',
       targetAmount: targetNum,
       currentAmount: savedNum,
@@ -99,13 +121,18 @@ export const SavingsGoalsStudio: React.FC = () => {
       plannedMonthlyContribution: contNum,
       icon: 'Target',
       category,
-    });
+      });
 
-    setIsAddModalOpen(false);
-    setName('');
-    setTargetAmount('');
-    setInitialSaved('');
-    setPlannedContribution('');
+      setIsAddModalOpen(false);
+      setName('');
+      setTargetAmount('');
+      setInitialSaved('');
+      setPlannedContribution('');
+    } catch {
+      setActionError('Could not save this goal. Your entries are still here; please retry.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   // Total monthly planned savings pool
@@ -116,6 +143,7 @@ export const SavingsGoalsStudio: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-12 animate-fadeIn">
+      {actionError && <p role="alert" className="fixed right-4 top-4 z-[60] max-w-sm rounded-xl border border-semantic-error/40 bg-[#151E38] p-3 text-xs text-semantic-error shadow-xl">{actionError}</p>}
       {/* Studio Banner */}
       <div className="p-6 rounded-3xl bg-midnight-surface/80 border border-white/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div>
@@ -134,6 +162,7 @@ export const SavingsGoalsStudio: React.FC = () => {
           {hasUnsavedSimulation && (
             <button
               onClick={handleSaveAllocations}
+              disabled={saving}
               className="px-4 py-2 rounded-xl bg-gradient-to-r from-turquoise to-[#35C2B9] text-midnight text-xs font-bold shadow-glow-turquoise transition-all flex items-center gap-1.5 animate-pulse"
             >
               <Icon name="Save" size={14} />
@@ -177,8 +206,30 @@ export const SavingsGoalsStudio: React.FC = () => {
       </div>
 
       {/* Goal Cards Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {goalsProjections.map(goal => {
+      {goalsProjections.length === 0 ? (
+        <div className="p-12 rounded-3xl bg-midnight-surface/80 border border-white/10 text-center space-y-4">
+          <div className="w-14 h-14 mx-auto rounded-full bg-semantic-success/10 text-semantic-success flex items-center justify-center">
+            <Icon name="Target" size={28} />
+          </div>
+          <div className="max-w-md mx-auto space-y-1">
+            <h3 className="text-base font-bold text-text-primary">No savings goals active yet</h3>
+            <p className="text-xs text-text-muted">
+              Define targets like an Emergency Cushion, Tech Gear, or Travel. Use the allocation slider to simulate trade-offs and celebrate milestone deposits.
+            </p>
+          </div>
+          <div className="pt-2">
+            <button
+              onClick={() => setIsAddModalOpen(true)}
+              className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-turquoise to-[#5ED6A2] text-midnight text-xs font-bold shadow-glow-turquoise transition-all flex items-center gap-2 mx-auto"
+            >
+              <Icon name="Plus" size={14} />
+              Set Your First Goal
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {goalsProjections.map(goal => {
           const pct = Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100));
           const simulatedCont =
             simulatedAllocations[goal.id] ?? goal.plannedMonthlyContribution;
@@ -229,7 +280,11 @@ export const SavingsGoalsStudio: React.FC = () => {
                       <Icon name="Pencil" size={13} />
                     </button>
                     <button
-                      onClick={() => deleteGoal(goal.id)}
+                      onClick={async () => {
+                        setActionError('');
+                        try { await deleteGoal(goal.id); }
+                        catch { setActionError('Could not delete this goal. Please retry.'); }
+                      }}
                       className="p-1 text-text-muted hover:text-semantic-error rounded"
                       title="Delete Goal"
                     >
@@ -307,10 +362,11 @@ export const SavingsGoalsStudio: React.FC = () => {
                   <span className="font-mono text-text-secondary">{goal.targetDate}</span>
                 </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* Deposit Modal */}
       {depositGoalId && (
@@ -351,6 +407,7 @@ export const SavingsGoalsStudio: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-5 py-2 rounded-xl bg-semantic-success text-midnight font-bold"
                 >
                   Confirm Deposit 🎉
@@ -460,6 +517,7 @@ export const SavingsGoalsStudio: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Create Goal
@@ -476,10 +534,18 @@ export const SavingsGoalsStudio: React.FC = () => {
           <div className="w-full max-w-md rounded-2xl bg-[#151E38] border border-white/10 p-6 shadow-2xl relative text-text-primary">
             <h3 className="text-base font-bold mb-4">Edit Goal: {editingGoal.name}</h3>
             <form
-              onSubmit={e => {
+              onSubmit={async e => {
                 e.preventDefault();
-                editGoal(editingGoal.id, editingGoal);
-                setEditingGoal(null);
+                setSaving(true);
+                setActionError('');
+                try {
+                  await editGoal(editingGoal.id, editingGoal);
+                  setEditingGoal(null);
+                } catch {
+                  setActionError('Could not update this goal. Your changes are still here; please retry.');
+                } finally {
+                  setSaving(false);
+                }
               }}
               className="space-y-3.5 text-xs"
             >
@@ -540,6 +606,7 @@ export const SavingsGoalsStudio: React.FC = () => {
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Save Changes
@@ -552,3 +619,4 @@ export const SavingsGoalsStudio: React.FC = () => {
     </div>
   );
 };
+

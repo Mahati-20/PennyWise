@@ -9,6 +9,10 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, onOpenAnalyzer }) => {
   const { currentView, setCurrentView, profile, setMode } = useFinancial();
+  const handleModeChange = async (mode: 'campus' | 'pro') => {
+    try { await setMode(mode); }
+    catch { window.alert('Could not save the experience mode. Please try again.'); }
+  };
 
   const navItems: { id: AppView; label: string; icon: string; badge?: string }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: 'LayoutDashboard' },
@@ -16,7 +20,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, onOpenAnalyzer
     { id: 'budgets', label: 'Budgets', icon: 'PieChart' },
     { id: 'goals', label: 'Savings Goals', icon: 'Target', badge: 'Studio' },
     { id: 'calendar', label: 'Financial Calendar', icon: 'CalendarDays' },
-    { id: 'coach', label: 'Money Coach', icon: 'Sparkles', badge: 'AI' },
+    { id: 'coach', label: 'Money Coach', icon: 'Sparkles' },
     { id: 'analyzer', label: 'Can I Afford This?', icon: 'ShieldAlert', badge: 'Signature' },
     { id: 'reports', label: 'Reports & Insights', icon: 'TrendingUp' },
     { id: 'settings', label: 'Settings', icon: 'Settings' },
@@ -56,7 +60,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, onOpenAnalyzer
       <div className="px-4 py-3 border-b border-white/5">
         <div className="p-1 rounded-xl bg-midnight border border-white/5 flex items-center justify-between text-xs font-semibold">
           <button
-            onClick={() => setMode('campus')}
+            onClick={() => handleModeChange('campus')}
             className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               profile.mode === 'campus'
                 ? 'bg-turquoise text-midnight font-bold shadow-glow-turquoise'
@@ -67,7 +71,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, onOpenAnalyzer
             Campus
           </button>
           <button
-            onClick={() => setMode('pro')}
+            onClick={() => handleModeChange('pro')}
             className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1.5 transition-all ${
               profile.mode === 'pro'
                 ? 'bg-lavender text-midnight font-bold shadow-glow-lavender'
@@ -162,3 +166,4 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenQuickAdd, onOpenAnalyzer
     </aside>
   );
 };
+

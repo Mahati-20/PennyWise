@@ -5,28 +5,24 @@ export const CURRENCIES: Record<CurrencyCode, CurrencyInfo> = {
     code: 'INR',
     symbol: '₹',
     name: 'Indian Rupee',
-    rateToUSD: 0.012,
     locale: 'en-IN',
   },
   USD: {
     code: 'USD',
     symbol: '$',
     name: 'US Dollar',
-    rateToUSD: 1.0,
     locale: 'en-US',
   },
   EUR: {
     code: 'EUR',
     symbol: '€',
     name: 'Euro',
-    rateToUSD: 1.08,
     locale: 'de-DE',
   },
   GBP: {
     code: 'GBP',
     symbol: '£',
     name: 'British Pound',
-    rateToUSD: 1.28,
     locale: 'en-GB',
   },
 };
@@ -55,20 +51,3 @@ export function formatCurrency(
   }
 }
 
-/**
- * Convert an amount from one currency to another using the reference exchange rates.
- */
-export function convertCurrency(
-  amount: number,
-  from: CurrencyCode,
-  to: CurrencyCode
-): number {
-  if (from === to) return amount;
-  const fromRate = CURRENCIES[from]?.rateToUSD || 1;
-  const toRate = CURRENCIES[to]?.rateToUSD || 1;
-  
-  // Convert from -> USD -> to
-  const inUSD = amount * fromRate;
-  const result = inUSD / toRate;
-  return Math.round(result * 100) / 100;
-}

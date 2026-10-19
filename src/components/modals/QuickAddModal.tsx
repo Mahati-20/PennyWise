@@ -32,10 +32,11 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
 
   const [errors, setErrors] = useState<{ amount?: string; category?: string }>({});
   const [isSuccess, setIsSuccess] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   if (!isOpen) return null;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const parsedAmount = parseFloat(amount);
 
@@ -50,17 +51,23 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     }
 
     // Save transaction
-    addTransaction({
-      amount: parsedAmount,
-      currency: profile.currency,
-      category,
-      date,
-      type,
-      paymentMethod,
-      description: description.trim() || (type === 'income' ? 'Income Deposit' : 'Expense'),
-      isRecurring,
-      recurringFrequency: isRecurring ? recurringFrequency : undefined,
-    });
+    setSaveError('');
+    try {
+      await addTransaction({
+        amount: parsedAmount,
+        currency: profile.currency,
+        category,
+        date,
+        type,
+        paymentMethod,
+        description: description.trim() || (type === 'income' ? 'Income Deposit' : 'Expense'),
+        isRecurring,
+        recurringFrequency: isRecurring ? recurringFrequency : undefined,
+      });
+    } catch {
+      setSaveError('Could not save this transaction. Your entries are still here; please try again.');
+      return;
+    }
 
     setIsSuccess(true);
     setTimeout(() => {
@@ -102,6 +109,8 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
             </p>
           </div>
         </div>
+
+        {saveError && <p role="alert" className="mb-4 rounded-lg border border-semantic-error/40 bg-semantic-error/10 p-3 text-xs text-semantic-error">{saveError}</p>}
 
         {/* Type Toggle */}
         <div className="grid grid-cols-2 p-1 mb-5 rounded-xl bg-midnight border border-white/5 text-sm font-medium">
@@ -291,3 +300,4 @@ export const QuickAddModal: React.FC<QuickAddModalProps> = ({
     </div>
   );
 };
+

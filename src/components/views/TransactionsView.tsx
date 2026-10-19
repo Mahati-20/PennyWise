@@ -26,6 +26,37 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenQuickA
   // Edit & Delete State
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
   const [deletingTxId, setDeletingTxId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingTx) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      await editTransaction(editingTx.id, editingTx);
+      setEditingTx(null);
+    } catch {
+      setActionError('Could not save the transaction. Your changes are still here; please retry.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deletingTxId) return;
+    setSaving(true);
+    setActionError('');
+    try {
+      await deleteTransaction(deletingTxId);
+      setDeletingTxId(null);
+    } catch {
+      setActionError('Could not delete the transaction. Please retry.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   // Filtered & Sorted Transactions
   const filteredTransactions = useMemo(() => {
@@ -322,13 +353,10 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenQuickA
           <div className="w-full max-w-md rounded-2xl bg-[#151E38] border border-white/10 p-6 shadow-2xl relative text-text-primary">
             <h3 className="text-base font-bold mb-4">Edit Transaction</h3>
             <form
-              onSubmit={e => {
-                e.preventDefault();
-                editTransaction(editingTx.id, editingTx);
-                setEditingTx(null);
-              }}
+              onSubmit={handleEditSubmit}
               className="space-y-3.5 text-xs"
             >
+              {actionError && <p role="alert" className="text-semantic-error">{actionError}</p>}
               <div>
                 <label className="block text-text-secondary mb-1">Description</label>
                 <input
@@ -391,6 +419,7 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenQuickA
                 </button>
                 <button
                   type="submit"
+                  disabled={saving}
                   className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
                 >
                   Save Changes
@@ -421,18 +450,18 @@ export const TransactionsView: React.FC<TransactionsViewProps> = ({ onOpenQuickA
                 Keep
               </button>
               <button
-                onClick={() => {
-                  deleteTransaction(deletingTxId);
-                  setDeletingTxId(null);
-                }}
+                onClick={handleDelete}
+                disabled={saving}
                 className="px-4 py-2 rounded-xl bg-semantic-error text-white font-bold text-xs"
               >
                 Delete
               </button>
             </div>
+            {actionError && <p role="alert" className="mt-3 text-xs text-semantic-error">{actionError}</p>}
           </div>
         </div>
       )}
     </div>
   );
 };
+

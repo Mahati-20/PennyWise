@@ -244,3 +244,4 @@ export const MoneyCoachView: React.FC = () => {
     </div>
   );
 };
+

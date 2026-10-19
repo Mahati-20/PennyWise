@@ -13,3 +13,4 @@ export const Icon: React.FC<IconProps> = ({ name, size = 18, className = '', col
   const LucideIcon = Icons[name] || Icons.CircleDot;
   return <LucideIcon size={size} className={className} color={color} {...props} />;
 };
+

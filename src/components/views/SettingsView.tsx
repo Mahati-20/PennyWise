@@ -15,18 +15,46 @@ export const SettingsView: React.FC = () => {
     budgets,
     goals,
     events,
+    currentUser,
+    isDemoMode,
+    logoutUser,
+    exitDemoMode,
   } = useFinancial();
 
   const [activeTab, setActiveTab] = useState<'profile' | 'transparency' | 'data'>('profile');
   const [name, setName] = useState(profile.name);
   const [collegeOrCompany, setCollegeOrCompany] = useState(profile.collegeOrCompany);
   const [isSavedNotice, setIsSavedNotice] = useState(false);
+  const [saveError, setSaveError] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  const handleProfileSave = (e: React.FormEvent) => {
+  const handleProfileSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    updateProfile({ name, collegeOrCompany });
-    setIsSavedNotice(true);
-    setTimeout(() => setIsSavedNotice(false), 2000);
+    setSaveError('');
+    setIsSavedNotice(false);
+    setIsSavingProfile(true);
+    try {
+      await updateProfile({ name, collegeOrCompany });
+      setIsSavedNotice(true);
+      setTimeout(() => setIsSavedNotice(false), 2000);
+    } catch {
+      setIsSavedNotice(false);
+      setSaveError('Could not save your profile. Your entries are still here; please retry.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
+  const handleModeChange = async (mode: UserMode) => {
+    setSaveError('');
+    try { await setMode(mode); }
+    catch { setSaveError('Could not update your experience mode. Please retry.'); }
+  };
+
+  const handleCurrencyChange = async (code: CurrencyCode) => {
+    setSaveError('');
+    try { await setCurrency(code); }
+    catch { setSaveError('Could not update account currency. Your existing amounts were not changed.'); }
   };
 
   const handleExportJSON = () => {
@@ -43,7 +71,7 @@ export const SettingsView: React.FC = () => {
     const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute('href', dataStr);
-    downloadAnchor.setAttribute('download', `Pennywise_Backup_${new Date().toISOString().split('T')[0]}.json`);
+    downloadAnchor.setAttribute('download', `Pennywise_Export_${new Date().toISOString().split('T')[0]}.json`);
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
@@ -104,7 +132,7 @@ export const SettingsView: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <button
                 type="button"
-                onClick={() => setMode('campus')}
+                onClick={() => handleModeChange('campus')}
                 className={`p-4 rounded-xl border text-left transition-all ${
                   profile.mode === 'campus'
                     ? 'border-turquoise bg-turquoise/10 shadow-glow-turquoise'
@@ -123,7 +151,7 @@ export const SettingsView: React.FC = () => {
 
               <button
                 type="button"
-                onClick={() => setMode('pro')}
+                onClick={() => handleModeChange('pro')}
                 className={`p-4 rounded-xl border text-left transition-all ${
                   profile.mode === 'pro'
                     ? 'border-lavender bg-lavender/10 shadow-glow-lavender'
@@ -144,17 +172,19 @@ export const SettingsView: React.FC = () => {
 
           {/* Currency Preference */}
           <div className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">Global Display Currency</h3>
+            <h3 className="text-sm font-bold text-text-primary">Account Currency</h3>
+            <p className="text-xs text-text-muted">Amounts are never converted. Currency can only be changed before onboarding amounts or records are saved.</p>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               {(Object.keys(CURRENCIES) as CurrencyCode[]).map(code => (
                 <button
                   key={code}
                   type="button"
-                  onClick={() => setCurrency(code)}
+                  onClick={() => handleCurrencyChange(code)}
+                  disabled={profile.onboardingCompleted}
                   className={`p-3 rounded-xl border text-center transition-all ${
                     profile.currency === code
                       ? 'border-turquoise bg-turquoise/15 text-turquoise font-bold shadow-sm'
-                      : 'border-white/10 bg-midnight text-text-muted hover:border-white/20'
+                    : 'border-white/10 bg-midnight text-text-muted hover:border-white/20 disabled:opacity-50 disabled:cursor-not-allowed'
                   }`}
                 >
                   <span className="text-base font-mono font-bold block mb-0.5">
@@ -174,6 +204,7 @@ export const SettingsView: React.FC = () => {
             onSubmit={handleProfileSave}
             className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-4 text-xs"
           >
+            {saveError && <p role="alert" className="text-xs text-semantic-error">{saveError}</p>}
             <h3 className="text-sm font-bold text-text-primary">Profile Details</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
@@ -209,6 +240,7 @@ export const SettingsView: React.FC = () => {
               )}
               <button
                 type="submit"
+                disabled={isSavingProfile}
                 className="px-4 py-2 rounded-xl bg-turquoise text-midnight font-bold"
               >
                 Save Details
@@ -266,10 +298,17 @@ export const SettingsView: React.FC = () => {
           <div className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-3">
             <div className="flex items-center gap-2 text-sm font-bold text-lavender">
               <Icon name="Lock" size={18} />
-              3. Privacy & Zero-API Commitment
+              3. Privacy, Database Isolation & Security Architecture
             </div>
             <p className="text-text-secondary leading-relaxed">
-              Pennywise runs 100% locally in your browser using structured client-side persistence. No personal financial data is transmitted to third-party ad networks or external tracking systems. The Money Coach heuristics are fully verifiable mathematical formulas, eliminating hallucinations.
+              Pennywise uses a <strong>Node.js + Express + SQLite</strong> backend. Passwords are hashed with
+              <code className="text-turquoise font-mono text-[11px]"> bcryptjs</code>; session cookies are HTTP-only.
+              The default session store is in memory, so this setup is for a local/demo deployment and needs a persistent session store before real use.
+            </p>
+            <p className="text-text-secondary leading-relaxed">
+              Financial API routes require an authenticated session and scope records to its user ID. This is an application behavior, not a professional security audit.
+              No personal financial data is transmitted to third-party ad networks, trackers, or external cloud databases.
+              Money Coach messages are simple rules-based summaries and should be treated as estimates, not financial advice.
             </p>
           </div>
         </div>
@@ -278,11 +317,51 @@ export const SettingsView: React.FC = () => {
       {/* Tab 3: Data & Demo Management */}
       {activeTab === 'data' && (
         <div className="space-y-4 text-xs">
+          {/* Session Status & Persona */}
+          <div className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-3">
+            <h3 className="text-sm font-bold text-text-primary">Current Session & Storage Status</h3>
+            <div className="p-3.5 rounded-xl bg-midnight border border-white/5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      isDemoMode ? 'bg-lavender animate-pulse' : 'bg-semantic-success'
+                    }`}
+                  />
+                  <span className="font-semibold text-text-primary">
+                    {isDemoMode ? 'Demo Mode (Sample Data)' : `Personal Account: ${currentUser?.email}`}
+                  </span>
+                </div>
+                <p className="text-[11px] text-text-muted mt-0.5">
+                  {isDemoMode
+                    ? 'Exploring pre-filled sample records in memory. Personal database is not affected.'
+                    : 'Persistent multi-tenant storage enabled. Data safely stored in local SQLite database.'}
+                </p>
+              </div>
+
+              {isDemoMode ? (
+                <button
+                  onClick={exitDemoMode}
+                  className="px-3 py-1.5 rounded-lg bg-midnight-elevated hover:bg-midnight border border-turquoise/30 text-xs font-semibold text-turquoise transition-colors shrink-0"
+                >
+                  Exit Demo & Register
+                </button>
+              ) : (
+                <button
+                  onClick={logoutUser}
+                  className="px-3 py-1.5 rounded-lg bg-semantic-error/15 hover:bg-semantic-error/25 border border-semantic-error/30 text-xs font-semibold text-semantic-error transition-colors shrink-0"
+                >
+                  Log Out
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-4">
             <h3 className="text-sm font-bold text-text-primary">Demo Data Management</h3>
             <p className="text-text-secondary leading-relaxed">
               Pennywise provides realistic sample datasets tailored for college students and working
-              professionals. You can reset anytime without affecting other devices.
+              professionals. You can switch personas to inspect either experience without polluting personal accounts.
             </p>
 
             <div className="flex flex-wrap gap-3">
@@ -291,7 +370,7 @@ export const SettingsView: React.FC = () => {
                 className="px-4 py-2.5 rounded-xl bg-midnight border border-turquoise/30 text-turquoise hover:bg-turquoise/15 font-semibold transition-all flex items-center gap-2"
               >
                 <Icon name="RotateCcw" size={14} />
-                Load Campus Demo Data (IIT Bombay)
+                Load Campus Demo Data (fictional sample)
               </button>
 
               <button
@@ -299,28 +378,31 @@ export const SettingsView: React.FC = () => {
                 className="px-4 py-2.5 rounded-xl bg-midnight border border-lavender/30 text-lavender hover:bg-lavender/15 font-semibold transition-all flex items-center gap-2"
               >
                 <Icon name="RotateCcw" size={14} />
-                Load Pro Demo Data (Stripe Senior Designer)
+                Load Pro Demo Data (fictional sample)
               </button>
             </div>
           </div>
 
           <div className="p-5 rounded-2xl bg-midnight-surface/80 border border-white/10 space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">Backup & Export</h3>
+            <h3 className="text-sm font-bold text-text-primary">Data Export</h3>
             <p className="text-text-secondary leading-relaxed">
-              Download your complete financial records, transactions, budgets, and savings goals as
-              a portable JSON file.
+              Download profile settings, transactions, budgets, savings goals, and calendar events as JSON.
+              This export is not a restorable backup and does not include authentication data or saved purchase analyses.
             </p>
 
-            <button
-              onClick={handleExportJSON}
-              className="px-4 py-2 rounded-xl bg-midnight-elevated hover:bg-midnight-hover border border-white/10 text-text-primary font-semibold flex items-center gap-2"
-            >
-              <Icon name="Download" size={14} className="text-turquoise" />
-              Export Full Account Backup (JSON)
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button
+                onClick={handleExportJSON}
+                className="px-4 py-2 rounded-xl bg-midnight-elevated hover:bg-midnight-hover border border-white/10 text-text-primary font-semibold flex items-center gap-2"
+              >
+                <Icon name="Download" size={14} className="text-turquoise" />
+                Export Account Data (JSON)
+              </button>
+            </div>
           </div>
         </div>
       )}
     </div>
   );
 };
+

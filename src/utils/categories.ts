@@ -40,3 +40,4 @@ export function getCategoryByName(name: string): CategoryInfo {
     mode: 'all',
   };
 }
+
