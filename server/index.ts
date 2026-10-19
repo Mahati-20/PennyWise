@@ -10,6 +10,9 @@ import financialsRouter from './routes/financials.js';
 const app = express();
 const PORT = process.env.PORT || 5000;
 const isProd = process.env.NODE_ENV === 'production';
+// Render terminates HTTPS at its proxy. Trust that hop so express-session
+// recognizes forwarded HTTPS requests when issuing Secure cookies.
+app.set('trust proxy', 1);
 const sessionSecret = process.env.SESSION_SECRET;
 if (isProd && (!sessionSecret || sessionSecret.length < 32)) {
   throw new Error('Production requires SESSION_SECRET with at least 32 characters.');

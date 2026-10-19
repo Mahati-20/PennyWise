@@ -2,6 +2,7 @@
 // Verifies registration, session auth, starting balance separation, CRUD, and strict tenant isolation.
 
 const BASE_URL = process.env.API_URL || 'http://localhost:5000/api';
+const EXPECT_SECURE_SESSION_COOKIE = process.env.EXPECT_SECURE_SESSION_COOKIE === '1';
 if (!process.env.API_URL || process.env.PENNYWISE_ALLOW_E2E_WRITES !== '1') {
   throw new Error('E2E tests create accounts and financial records. Set API_URL to a backend using a disposable DATABASE_PATH and PENNYWISE_ALLOW_E2E_WRITES=1.');
 }
@@ -16,6 +17,7 @@ class ApiClient {
       'Content-Type': 'application/json',
       ...(options.headers || {}),
     };
+    if (EXPECT_SECURE_SESSION_COOKIE) headers['X-Forwarded-Proto'] = 'https';
     if (this.cookie) {
       headers['Cookie'] = this.cookie;
     }
@@ -27,7 +29,13 @@ class ApiClient {
 
     const setCookie = res.headers.get('set-cookie');
     if (setCookie) {
+      if (EXPECT_SECURE_SESSION_COOKIE && !/;\s*secure(?:;|$)/i.test(setCookie)) {
+        throw new Error('Session cookie was not marked Secure for a forwarded HTTPS request.');
+      }
       this.cookie = setCookie.split(';')[0];
+    }
+    if (EXPECT_SECURE_SESSION_COOKIE && res.ok && (path === '/auth/signup' || path === '/auth/login') && !setCookie) {
+      throw new Error('Authentication did not issue a session cookie for a forwarded HTTPS request.');
     }
 
     const data = await res.json().catch(() => ({}));
